@@ -199,6 +199,57 @@ async function scrapeFullFilms(username, maxPages = 5) {
   return allEntries;
 }
 
+async function searchTMDB(movie) {
+  const baseParams = new URLSearchParams({
+    api_key: TMDB_API_KEY,
+    include_adult: 'false',
+  });
+
+  // Helper to run a search and return TMDB results array
+  const runSearch = async (path, extraParams = {}) => {
+    const url = new URL(`https://api.themoviedb.org/3${path}`);
+    const params = new URLSearchParams(baseParams.toString());
+    params.set('query', movie.Name);
+    Object.entries(extraParams).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+    });
+    url.search = params.toString();
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Search failed: ${res.statusText}`);
+    const data = await res.json();
+    return Array.isArray(data.results) ? data.results : [];
+  };
+
+  // 1) Movie search with year (most precise)
+  if (movie.Year) {
+    const results = await runSearch('/search/movie', { year: movie.Year });
+    if (results.length > 0) {
+      return { match: results[0], mediaType: 'movie' };
+    }
+  }
+
+  // 2) Movie search without year (fallback)
+  {
+    const results = await runSearch('/search/movie');
+    if (results.length > 0) {
+      return { match: results[0], mediaType: 'movie' };
+    }
+  }
+
+  // 3) Multi search (to catch popular TV/limited series etc.)
+  {
+    const results = await runSearch('/search/multi');
+    const filtered = results.filter(r => r.media_type === 'movie' || r.media_type === 'tv');
+    if (filtered.length > 0) {
+      const best = filtered.sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
+      return { match: best, mediaType: best.media_type };
+    }
+  }
+
+  return { match: null, mediaType: null };
+}
+
 async function enrichWithTMDB(entries) {
   if (!TMDB_API_KEY) {
     throw new Error('TMDB_API_KEY is not configured on the server.');
@@ -212,49 +263,50 @@ async function enrichWithTMDB(entries) {
 
     const enrichedChunk = await Promise.all(chunk.map(async (movie) => {
       try {
-        const searchUrl = new URL('https://api.themoviedb.org/3/search/movie');
-        searchUrl.searchParams.set('api_key', TMDB_API_KEY);
-        searchUrl.searchParams.set('query', movie.Name);
-        if (movie.Year) searchUrl.searchParams.set('year', movie.Year);
+        const { match, mediaType } = await searchTMDB(movie);
 
-        const searchRes = await fetch(searchUrl);
-        if (!searchRes.ok) throw new Error(`Search failed: ${searchRes.statusText}`);
-        const searchData = await searchRes.json();
-
-        if (searchData.results && searchData.results.length > 0) {
-          const match = searchData.results[0];
-
-          const detailsUrl = new URL(`https://api.themoviedb.org/3/movie/${match.id}`);
-          detailsUrl.searchParams.set('api_key', TMDB_API_KEY);
-          detailsUrl.searchParams.set('append_to_response', 'credits');
-
-          const detailsRes = await fetch(detailsUrl);
-          if (!detailsRes.ok) throw new Error(`Details failed: ${detailsRes.statusText}`);
-          const detailsData = await detailsRes.json();
-
-          const directors = (detailsData.credits?.crew || [])
-            .filter((person) => person.job === 'Director')
-            .map((d) => ({ id: d.id, name: d.name }));
-
-          const cast = (detailsData.credits?.cast || [])
-            .slice(0, 10)
-            .map((c) => ({ id: c.id, name: c.name }));
-
-          return {
-            ...movie,
-            poster_path: match.poster_path,
-            backdrop_path: match.backdrop_path,
-            genres: detailsData.genres || [],
-            production_countries: detailsData.production_countries || [],
-            original_language: match.original_language,
-            tmdb_id: match.id,
-            runtime: detailsData.runtime || 0,
-            directors,
-            cast,
-          };
+        if (!match || !mediaType) {
+          return { ...movie, notFound: true };
         }
 
-        return { ...movie, notFound: true };
+        const typePath = mediaType === 'tv' ? 'tv' : 'movie';
+        const detailsUrl = new URL(`https://api.themoviedb.org/3/${typePath}/${match.id}`);
+        detailsUrl.searchParams.set('api_key', TMDB_API_KEY);
+        detailsUrl.searchParams.set('append_to_response', 'credits');
+
+        const detailsRes = await fetch(detailsUrl);
+        if (!detailsRes.ok) throw new Error(`Details failed: ${detailsRes.statusText}`);
+        const detailsData = await detailsRes.json();
+
+        const credits = detailsData.credits || {};
+        const directors = (credits.crew || [])
+          .filter((person) => person.job === 'Director' || person.job === 'Series Director' || person.department === 'Directing')
+          .map((d) => ({ id: d.id, name: d.name }));
+
+        const cast = (credits.cast || [])
+          .slice(0, 10)
+          .map((c) => ({ id: c.id, name: c.name }));
+
+        // Approximate runtime for TV if needed
+        let runtime = 0;
+        if (typeof detailsData.runtime === 'number') {
+          runtime = detailsData.runtime;
+        } else if (Array.isArray(detailsData.episode_run_time) && detailsData.episode_run_time.length > 0) {
+          runtime = detailsData.episode_run_time[0];
+        }
+
+        return {
+          ...movie,
+          poster_path: match.poster_path,
+          backdrop_path: match.backdrop_path,
+          genres: detailsData.genres || [],
+          production_countries: detailsData.production_countries || [],
+          original_language: match.original_language,
+          tmdb_id: match.id,
+          runtime: runtime || 0,
+          directors,
+          cast,
+        };
       } catch (err) {
         console.error('TMDB enrichment failed for', movie.Name, err);
         return { ...movie, error: true };
