@@ -62,22 +62,22 @@ const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel, starI
 const MemoizedCustomTooltip = React.memo(CustomTooltip);
 
 const StatCard = ({ icon: Icon, title, value, subtext, color = "text-white" }: any) => (
-    <div className="bg-lb-surface p-5 rounded-lg border border-gray-800 shadow-lg flex flex-col justify-between hover:border-gray-600 transition-colors duration-300">
+    <div className="bg-lb-surface p-4 md:p-5 rounded-lg border border-gray-800 shadow-lg flex flex-col justify-between hover:border-gray-600 transition-colors duration-300">
         <div>
             <div className="flex items-center gap-2 mb-2">
                 <Icon className={`w-4 h-4 ${color}`} />
                 <h3 className="text-lb-text text-xs uppercase tracking-wider font-semibold">{title}</h3>
             </div>
-            <p className="text-3xl font-bold text-white">{value}</p>
+            <p className="text-2xl md:text-3xl font-bold text-white">{value}</p>
         </div>
         {subtext && <p className="text-xs text-gray-500 mt-2">{subtext}</p>}
     </div>
 );
 
 const SectionHeader = ({ icon: Icon, title, color = "text-white" }: any) => (
-    <div className="flex items-center gap-2 mb-6">
-        <Icon className={`w-6 h-6 ${color}`} />
-        <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
+    <div className="flex items-center gap-2 mb-4 md:mb-6">
+        <Icon className={`w-5 h-5 md:w-6 md:h-6 ${color}`} />
+        <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">{title}</h3>
     </div>
 );
 
@@ -290,7 +290,7 @@ const App: React.FC = () => {
                 count: stat.count,
                 topMovies: ratedMoviesWithPoster
                     .sort((a, b) => parseFloat(b.Rating) - parseFloat(a.Rating))
-                    .slice(0, 14) 
+                    .slice(0, 12) 
             };
         })
         .filter(d => d.count >= 3)
@@ -360,15 +360,15 @@ const App: React.FC = () => {
   return (
     <Layout>
       {/* Header */}
-      <header className={`text-center border-b border-lb-surface pb-8 transition-all duration-500 ${status === 'ready' ? 'mb-8' : 'mb-12'}`}>
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <Film className={`w-10 h-10 text-lb-green ${isProcessing ? 'animate-bounce' : ''}`} />
-          <h1 className="text-4xl font-bold text-white tracking-tight">
+      <header className={`text-center border-b border-lb-surface pb-6 md:pb-8 transition-all duration-500 ${status === 'ready' ? 'mb-6 md:mb-8' : 'mb-8 md:mb-12'}`}>
+        <div className="flex items-center justify-center gap-2 md:gap-3 mb-4">
+          <Film className={`w-8 h-8 md:w-10 md:h-10 text-lb-green ${isProcessing ? 'animate-bounce' : ''}`} />
+          <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
             Letterboxd <span className="text-lb-blue">Stats</span>
           </h1>
         </div>
         {status !== 'ready' && (
-           <p className="text-lb-text max-w-xl mx-auto text-lg">
+           <p className="text-lb-text max-w-xl mx-auto text-base md:text-lg px-4">
              Visualize your movie watching habits. Export your data from Letterboxd and drop it below.
            </p>
         )}
@@ -377,7 +377,7 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="w-full">
         {status === 'idle' && (
-          <div className="max-w-xl mx-auto bg-lb-surface p-8 rounded-xl shadow-xl border border-gray-800 hover:border-gray-700 transition-colors">
+          <div className="max-w-xl mx-auto bg-lb-surface p-6 md:p-8 rounded-xl shadow-xl border border-gray-800 hover:border-gray-700 transition-colors">
             <div className="mb-6">
               <label className="block text-sm font-medium text-lb-text mb-2">
                 1. TMDB API Key
@@ -387,7 +387,7 @@ const App: React.FC = () => {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="Enter your TMDB Read Access Token or API Key"
-                className="w-full bg-lb-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-lb-green transition-colors"
+                className="w-full bg-lb-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-lb-green transition-colors text-sm md:text-base"
               />
               <p className="text-xs text-gray-500 mt-2">
                 Required to fetch genre, country, cast, and crew data.
@@ -405,10 +405,10 @@ const App: React.FC = () => {
                   onChange={handleFileUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
-                <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center group-hover:border-lb-blue transition-colors bg-lb-bg group-hover:bg-gray-800">
-                  <Upload className="w-12 h-12 mx-auto text-gray-500 mb-4 group-hover:text-lb-blue transition-colors" />
-                  <p className="text-white font-medium">Click or Drag CSV here</p>
-                  <p className="text-sm text-gray-500 mt-1">Exported from Letterboxd settings</p>
+                <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 md:p-8 text-center group-hover:border-lb-blue transition-colors bg-lb-bg group-hover:bg-gray-800">
+                  <Upload className="w-10 h-10 md:w-12 md:h-12 mx-auto text-gray-500 mb-4 group-hover:text-lb-blue transition-colors" />
+                  <p className="text-white font-medium text-sm md:text-base">Click or Drag CSV here</p>
+                  <p className="text-xs md:text-sm text-gray-500 mt-1">Exported from Letterboxd settings</p>
                 </div>
               </div>
             </div>
@@ -424,21 +424,21 @@ const App: React.FC = () => {
 
         {/* Processing State */}
         {(status === 'parsing' || status === 'fetching') && (
-          <div className="max-w-xl mx-auto text-center py-20">
-            <div className="mb-6 relative w-24 h-24 mx-auto">
+          <div className="max-w-xl mx-auto text-center py-10 md:py-20">
+            <div className="mb-6 relative w-20 h-20 md:w-24 md:h-24 mx-auto">
                 <div className="absolute inset-0 border-4 border-lb-surface rounded-full"></div>
                 <div 
                     className="absolute inset-0 border-4 border-lb-green rounded-full border-t-transparent animate-spin"
                 ></div>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">
+            <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
                 {status === 'parsing' ? 'Parsing CSV...' : 'Fetching Data...'}
             </h2>
-            <p className="text-lb-text mb-6">
+            <p className="text-lb-text mb-6 text-sm md:text-base">
                 Analyzing {status === 'fetching' ? 'metadata, credits, and runtimes' : 'file'}.
             </p>
             
-            <div className="w-full bg-lb-surface rounded-full h-4 overflow-hidden">
+            <div className="w-full bg-lb-surface rounded-full h-3 md:h-4 overflow-hidden">
                 <div 
                     className="bg-lb-green h-full transition-all duration-300 ease-out"
                     style={{ width: `${progress}%` }}
@@ -450,11 +450,11 @@ const App: React.FC = () => {
 
         {/* Dashboard Visualization */}
         {status === 'ready' && stats && (
-          <div className="animate-[fadeIn_0.5s_ease-out] pb-20 space-y-8">
+          <div className="animate-[fadeIn_0.5s_ease-out] pb-20 space-y-6 md:space-y-8">
              {/* Action Bar */}
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-white">Your Dashboard</h2>
+                    <h2 className="text-2xl md:text-3xl font-bold text-white">Your Dashboard</h2>
                     <p className="text-lb-text text-sm">Analysis of {data.length} films</p>
                 </div>
                 <button 
@@ -463,7 +463,7 @@ const App: React.FC = () => {
                         setData([]);
                         setProgress(0);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-lb-surface hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-600 shadow-sm hover:shadow"
+                    className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-lb-surface hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-600 shadow-sm hover:shadow"
                 >
                     <RotateCcw className="w-4 h-4" />
                     Start Over
@@ -471,20 +471,20 @@ const App: React.FC = () => {
              </div>
 
              {/* 1. Overview Cards */}
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
                 <StatCard icon={Film} title="Total Films" value={data.length} color="text-lb-green" />
                 <StatCard icon={Clock} title="Hours Watched" value={stats.totalHours.toLocaleString()} color="text-lb-orange" subtext="Approximate runtime" />
                 <StatCard icon={BarChart3} title="Avg Rating" value={stats.averageRating} color="text-lb-blue" />
              </div>
 
              {/* 2. Timeline (Years) */}
-             <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                <div className="flex items-center justify-between mb-6">
+             <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
                     <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-bold text-white tracking-widest uppercase">By Year</span>
                     </div>
-                    <div className="h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
-                    <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase">
+                    <div className="hidden sm:block h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
+                    <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase w-full sm:w-auto justify-between sm:justify-end">
                         <button 
                             onClick={() => setYearMetric('films')}
                             className={`${yearMetric === 'films' ? 'text-lb-green' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
@@ -506,12 +506,12 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="h-64 w-full">
+                <div className="h-48 md:h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={stats.yearsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.2} />
-                            <XAxis dataKey="name" tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} minTickGap={15} />
-                            <YAxis tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} domain={yearMetric === 'rating' ? [0, 5] : [0, 'auto']} />
+                            <XAxis dataKey="name" tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={15} />
+                            <YAxis tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} domain={yearMetric === 'rating' ? [0, 5] : [0, 'auto']} />
                             <Tooltip 
                                 content={<MemoizedCustomTooltip valueType={yearMetric} />} 
                                 cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
@@ -534,23 +534,25 @@ const App: React.FC = () => {
             </div>
 
              {/* 3. Highest Rated Decades */}
-             <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
+             <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
                 <SectionHeader icon={Star} title="Highest Rated Decades" color="text-white" />
-                <div className="space-y-8">
+                <div className="space-y-6 md:space-y-8">
                     {stats.topDecades.map((decade) => (
-                        <div key={decade.name} className="flex flex-col md:flex-row gap-6">
-                            <div className="w-full md:w-48 flex-shrink-0 flex flex-col justify-start pt-2">
-                                <span className="text-5xl font-light text-white mb-2">{decade.name}</span>
-                                <div className="flex items-center text-lb-text gap-1 text-sm">
-                                    <Star className="w-3 h-3 text-lb-green fill-current" />
-                                    <span>Average {decade.average.toFixed(2)}</span>
+                        <div key={decade.name} className="flex flex-col md:flex-row gap-4 md:gap-6">
+                            <div className="w-full md:w-48 flex-shrink-0 flex flex-row md:flex-col justify-between md:justify-start items-center md:items-start pt-0 md:pt-2 border-b md:border-b-0 border-gray-800 pb-2 md:pb-0 mb-2 md:mb-0">
+                                <span className="text-3xl md:text-5xl font-light text-white mb-0 md:mb-2">{decade.name}</span>
+                                <div className="text-right md:text-left">
+                                    <div className="flex items-center text-lb-text gap-1 text-sm justify-end md:justify-start">
+                                        <Star className="w-3 h-3 text-lb-green fill-current" />
+                                        <span>Avg {decade.average.toFixed(2)}</span>
+                                    </div>
+                                    <span className="text-xs text-gray-500 mt-1 block">{decade.count} films</span>
                                 </div>
-                                <span className="text-xs text-gray-500 mt-1">{decade.count} films</span>
                             </div>
                             <div className="flex-grow">
-                                <div className="flex flex-wrap gap-2">
+                                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 lg:gap-3">
                                     {decade.topMovies.map((movie, idx) => (
-                                        <div key={`${movie.tmdb_id}-${idx}`} className="relative group w-[70px] md:w-[90px] aspect-[2/3] bg-gray-800 rounded overflow-hidden shadow-lg hover:ring-2 hover:ring-lb-green transition-all cursor-default transform hover:-translate-y-1 hover:z-10 duration-200">
+                                        <div key={`${movie.tmdb_id}-${idx}`} className="relative group w-full aspect-[2/3] bg-gray-800 rounded overflow-hidden shadow-lg hover:ring-2 hover:ring-lb-green transition-all cursor-default transform hover:-translate-y-1 hover:z-10 duration-200">
                                             {movie.poster_path ? (
                                                 <img 
                                                     src={`https://image.tmdb.org/t/p/w154${movie.poster_path}`} 
@@ -558,14 +560,14 @@ const App: React.FC = () => {
                                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                                 />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 p-1 text-center bg-gray-900">
+                                                <div className="w-full h-full flex items-center justify-center text-[8px] md:text-xs text-gray-500 p-1 text-center bg-gray-900">
                                                     {movie.Name}
                                                 </div>
                                             )}
                                             <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
                                                 <div className="text-center">
-                                                    <span className="block text-lb-green font-bold text-lg scale-0 group-hover:scale-100 transition-transform delay-75">{movie.Rating}</span>
-                                                    <span className="block text-[10px] text-white/80 line-clamp-2 px-1">{movie.Name}</span>
+                                                    <span className="block text-lb-green font-bold text-base md:text-lg scale-0 group-hover:scale-100 transition-transform delay-75">{movie.Rating}</span>
+                                                    <span className="block text-[9px] md:text-[10px] text-white/80 line-clamp-2 px-1">{movie.Name}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -578,14 +580,14 @@ const App: React.FC = () => {
              </div>
 
              {/* 4. Ratings Profile */}
-             <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
+             <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
                 <SectionHeader icon={BarChart3} title="Ratings Profile" color="text-lb-orange" />
-                <div className="h-64 w-full">
+                <div className="h-48 md:h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={stats.ratingsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.2} />
-                            <XAxis dataKey="label" tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
-                            <YAxis tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
+                            <XAxis dataKey="label" tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                            <YAxis tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                             <Tooltip 
                                 content={<MemoizedCustomTooltip isRatingLabel={true} />} 
                                 cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
@@ -607,14 +609,14 @@ const App: React.FC = () => {
              </div>
 
              {/* 5. Genres, Countries & Languages (Combined) */}
-             <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+             <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
                  {/* Combined Header */}
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-3 md:gap-4">
                     <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-bold text-white tracking-widest uppercase">Genres, Countries & Languages</span>
                     </div>
                     <div className="hidden md:block h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
-                    <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase self-end md:self-auto">
+                    <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase w-full md:w-auto justify-between md:justify-end">
                         <button 
                             onClick={() => setGclMetric('watched')}
                             className={`${gclMetric === 'watched' ? 'text-lb-blue' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
@@ -630,14 +632,14 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 overflow-x-auto min-w-[600px] pb-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-4">
                     {/* Genres */}
-                    <div className="h-[400px]">
+                    <div className="h-[300px] md:h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={getSortedGCL(stats.genresData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis dataKey="name" type="category" width={80} tick={{ fill: '#99aabb', fontSize: 10 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
                                     content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} starIconColor="text-lb-green" />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
@@ -659,12 +661,12 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Countries */}
-                    <div className="h-[400px]">
+                    <div className="h-[300px] md:h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={getSortedGCL(stats.countriesData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis dataKey="name" type="category" width={80} tick={{ fill: '#99aabb', fontSize: 10 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
                                     content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} starIconColor="text-lb-green" />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
@@ -686,12 +688,12 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Languages */}
-                    <div className="h-[400px]">
+                    <div className="h-[300px] md:h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={getSortedGCL(stats.languagesData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis dataKey="name" type="category" width={80} tick={{ fill: '#99aabb', fontSize: 10 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
                                     content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} starIconColor="text-lb-green" />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
@@ -715,15 +717,15 @@ const App: React.FC = () => {
              </div>
 
              {/* 6. Directors & Stars */}
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
                     <SectionHeader icon={Users} title="Top Directors" color="text-lb-blue" />
-                    <div className="h-[400px] w-full">
+                    <div className="h-[300px] md:h-[400px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.directorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
                                     content={<MemoizedCustomTooltip />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
@@ -745,14 +747,14 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
+                <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
                     <SectionHeader icon={Users} title="Top Stars" color="text-lb-orange" />
-                    <div className="h-[400px] w-full">
+                    <div className="h-[300px] md:h-[400px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.actorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
                                     content={<MemoizedCustomTooltip />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
