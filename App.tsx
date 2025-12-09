@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Upload, Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Globe } from 'lucide-react';
+import { Upload, Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Globe, Star } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   CartesianGrid,
@@ -28,10 +28,10 @@ const CustomTooltip = ({ active, payload, label, valueType }: any) => {
     }
 
     return (
-      <div className="bg-lb-surface border border-gray-700 p-3 rounded shadow-xl z-50 text-xs pointer-events-none">
+      <div className="bg-lb-surface border border-gray-600 p-3 rounded shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-50 text-xs pointer-events-none backdrop-blur-sm bg-opacity-95">
         <p className="text-white font-bold mb-1 text-sm">{label}</p>
-        <p className="text-lb-green">
-          {value}{unit}
+        <p className="text-lb-green font-mono text-base">
+          {value}<span className="text-gray-400 text-xs ml-1">{unit}</span>
         </p>
       </div>
     );
@@ -39,8 +39,11 @@ const CustomTooltip = ({ active, payload, label, valueType }: any) => {
   return null;
 };
 
+// Memoized custom tooltip
+const MemoizedCustomTooltip = React.memo(CustomTooltip);
+
 const StatCard = ({ icon: Icon, title, value, subtext, color = "text-white" }: any) => (
-    <div className="bg-lb-surface p-5 rounded-lg border border-gray-800 shadow-lg flex flex-col justify-between">
+    <div className="bg-lb-surface p-5 rounded-lg border border-gray-800 shadow-lg flex flex-col justify-between hover:border-gray-600 transition-colors duration-300">
         <div>
             <div className="flex items-center gap-2 mb-2">
                 <Icon className={`w-4 h-4 ${color}`} />
@@ -120,7 +123,6 @@ const App: React.FC = () => {
     if (data.length === 0) return null;
 
     // Detailed Year Stats
-    // Keys are year strings (e.g. "2023", "1999")
     const yearsDetailedMap: Record<string, { 
         diaryCount: number; 
         sumRating: number; 
@@ -128,7 +130,13 @@ const App: React.FC = () => {
         uniqueMovies: Set<string>;
     }> = {};
 
-    const decadesMap: Record<string, number> = {};
+    // For Decade Analysis
+    const decadesDetailedMap: Record<string, {
+        sumRating: number;
+        count: number;
+        movies: EnrichedMovie[];
+    }> = {};
+
     const ratingsMap: Record<string, number> = {};
     const genresMap: Record<string, number> = {};
     const countriesMap: Record<string, number> = {};
@@ -152,7 +160,7 @@ const App: React.FC = () => {
     };
 
     data.forEach(movie => {
-      // 1. Release Year Stats (Films count, Ratings, Decades)
+      // 1. Release Year Stats (Films count, Ratings)
       if (movie.Year) {
         ensureYearEntry(movie.Year);
         const yStat = yearsDetailedMap[movie.Year];
@@ -164,19 +172,27 @@ const App: React.FC = () => {
             yStat.ratedCount += 1;
         }
 
+        // Decade Logic
         const yearInt = parseInt(movie.Year);
         if (!isNaN(yearInt)) {
             const decade = Math.floor(yearInt / 10) * 10;
             const decadeLabel = `${decade}s`;
-            decadesMap[decadeLabel] = (decadesMap[decadeLabel] || 0) + 1;
+            
+            if (!decadesDetailedMap[decadeLabel]) {
+                decadesDetailedMap[decadeLabel] = { sumRating: 0, count: 0, movies: [] };
+            }
+            
+            if (movie.Rating) {
+                decadesDetailedMap[decadeLabel].sumRating += parseFloat(movie.Rating);
+                decadesDetailedMap[decadeLabel].count += 1;
+            }
+            decadesDetailedMap[decadeLabel].movies.push(movie);
         }
       }
 
       // 2. Diary Stats (Logged Count based on 'Watched Date' or 'Date' column)
-      // Prioritize explicit 'Watched Date' if it exists (some exports separate Logged vs Watched)
       const watchedDate = movie['Watched Date'] || movie.Date;
       if (watchedDate) {
-          // Date format is typically YYYY-MM-DD
           const diaryYear = watchedDate.split('-')[0];
           if (diaryYear && !isNaN(parseInt(diaryYear))) {
               ensureYearEntry(diaryYear);
@@ -227,7 +243,7 @@ const App: React.FC = () => {
       }
     });
 
-    // Format for Recharts
+    // Format for Recharts / UI
     const yearsData = Object.entries(yearsDetailedMap)
       .map(([name, stat]) => ({ 
           name, 
@@ -237,9 +253,23 @@ const App: React.FC = () => {
       }))
       .sort((a, b) => parseInt(a.name) - parseInt(b.name));
 
-    const decadesData = Object.entries(decadesMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => parseInt(a.name) - parseInt(b.name));
+    // Process Top Decades for Showcase
+    const topDecades = Object.entries(decadesDetailedMap)
+        .map(([name, stat]) => {
+            const ratedMoviesWithPoster = stat.movies.filter(m => m.Rating && m.poster_path);
+            
+            return {
+                name,
+                average: stat.count > 0 ? stat.sumRating / stat.count : 0,
+                count: stat.count,
+                topMovies: ratedMoviesWithPoster
+                    .sort((a, b) => parseFloat(b.Rating) - parseFloat(a.Rating))
+                    .slice(0, 14) 
+            };
+        })
+        .filter(d => d.count >= 3)
+        .sort((a, b) => b.average - a.average)
+        .slice(0, 3);
 
     const ratingsData = Object.entries(ratingsMap)
         .map(([name, value]) => ({ name: parseFloat(name), value, label: name }))
@@ -270,7 +300,7 @@ const App: React.FC = () => {
 
     return { 
         yearsData, 
-        decadesData, 
+        topDecades,
         ratingsData, 
         genresData, 
         countriesData, 
@@ -287,7 +317,7 @@ const App: React.FC = () => {
       {/* Header */}
       <header className={`text-center border-b border-lb-surface pb-8 transition-all duration-500 ${status === 'ready' ? 'mb-8' : 'mb-12'}`}>
         <div className="flex items-center justify-center gap-3 mb-4">
-          <Film className="w-10 h-10 text-lb-green" />
+          <Film className="w-10 h-10 text-lb-green animate-bounce" />
           <h1 className="text-4xl font-bold text-white tracking-tight">
             Letterboxd <span className="text-lb-blue">Stats</span>
           </h1>
@@ -302,7 +332,7 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="w-full">
         {status === 'idle' && (
-          <div className="max-w-xl mx-auto bg-lb-surface p-8 rounded-xl shadow-xl border border-gray-800">
+          <div className="max-w-xl mx-auto bg-lb-surface p-8 rounded-xl shadow-xl border border-gray-800 hover:border-gray-700 transition-colors">
             <div className="mb-6">
               <label className="block text-sm font-medium text-lb-text mb-2">
                 1. TMDB API Key
@@ -330,7 +360,7 @@ const App: React.FC = () => {
                   onChange={handleFileUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
-                <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center group-hover:border-lb-blue transition-colors bg-lb-bg">
+                <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center group-hover:border-lb-blue transition-colors bg-lb-bg group-hover:bg-gray-800">
                   <Upload className="w-12 h-12 mx-auto text-gray-500 mb-4 group-hover:text-lb-blue transition-colors" />
                   <p className="text-white font-medium">Click or Drag CSV here</p>
                   <p className="text-sm text-gray-500 mt-1">Exported from Letterboxd settings</p>
@@ -375,7 +405,7 @@ const App: React.FC = () => {
 
         {/* Dashboard Visualization */}
         {status === 'ready' && stats && (
-          <div className="animate-fade-in pb-20 space-y-8">
+          <div className="animate-[fadeIn_0.5s_ease-out] pb-20 space-y-8">
              {/* Action Bar */}
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -388,7 +418,7 @@ const App: React.FC = () => {
                         setData([]);
                         setProgress(0);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-lb-surface hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-600"
+                    className="flex items-center gap-2 px-4 py-2 bg-lb-surface hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-600 shadow-sm hover:shadow"
                 >
                     <RotateCcw className="w-4 h-4" />
                     Start Over
@@ -402,99 +432,166 @@ const App: React.FC = () => {
                 <StatCard icon={BarChart3} title="Avg Rating" value={stats.averageRating} color="text-lb-blue" />
              </div>
 
-             {/* 2. Timeline (Years & Decades) */}
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                    {/* Header with Tabs */}
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-xs font-bold text-white tracking-widest uppercase">By Year</span>
-                        </div>
-                        <div className="h-[1px] bg-gray-700 w-full mx-4"></div>
-                        <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase">
-                            <button 
-                                onClick={() => setYearMetric('films')}
-                                className={`${yearMetric === 'films' ? 'text-white' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
-                            >
-                                Films
-                            </button>
-                            <button 
-                                onClick={() => setYearMetric('rating')}
-                                className={`${yearMetric === 'rating' ? 'text-white' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
-                            >
-                                Ratings
-                            </button>
-                            <button 
-                                onClick={() => setYearMetric('diary')}
-                                className={`${yearMetric === 'diary' ? 'text-white' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
-                            >
-                                Diary
-                            </button>
-                        </div>
+             {/* 2. Timeline (Years) */}
+             <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
+                {/* Header with Tabs */}
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold text-white tracking-widest uppercase">By Year</span>
                     </div>
-
-                    <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.yearsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.3} />
-                                <XAxis dataKey="name" tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} minTickGap={15} />
-                                <YAxis tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} domain={yearMetric === 'rating' ? [0, 5] : [0, 'auto']} />
-                                <Tooltip content={<CustomTooltip valueType={yearMetric} />} cursor={{fill: '#445566', opacity: 0.2}} />
-                                <Bar 
-                                    dataKey={yearMetric} 
-                                    fill={yearMetric === 'films' ? '#00e054' : yearMetric === 'rating' ? '#40bcf4' : '#ff8000'} 
-                                    radius={[2, 2, 0, 0]} 
-                                    maxBarSize={40} 
-                                />
-                            </BarChart>
-                        </ResponsiveContainer>
+                    <div className="h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
+                    <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase">
+                        <button 
+                            onClick={() => setYearMetric('films')}
+                            className={`${yearMetric === 'films' ? 'text-lb-green' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+                        >
+                            Films
+                        </button>
+                        <button 
+                            onClick={() => setYearMetric('rating')}
+                            className={`${yearMetric === 'rating' ? 'text-lb-blue' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+                        >
+                            Ratings
+                        </button>
+                        <button 
+                            onClick={() => setYearMetric('diary')}
+                            className={`${yearMetric === 'diary' ? 'text-lb-orange' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+                        >
+                            Diary
+                        </button>
                     </div>
                 </div>
 
-                <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                    <SectionHeader icon={Clock} title="Decade Stats" color="text-lb-green" />
-                    <div className="h-64 w-full">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.decadesData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.3} />
-                                <XAxis dataKey="name" tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
-                                <YAxis tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
-                                <Tooltip content={<CustomTooltip />} cursor={{fill: '#445566', opacity: 0.2}} />
-                                <Bar dataKey="value" fill="#00e054" radius={[2, 2, 0, 0]} barSize={30} fillOpacity={0.8} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
+                <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={stats.yearsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.2} />
+                            <XAxis dataKey="name" tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} minTickGap={15} />
+                            <YAxis tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} domain={yearMetric === 'rating' ? [0, 5] : [0, 'auto']} />
+                            <Tooltip 
+                                content={<MemoizedCustomTooltip valueType={yearMetric} />} 
+                                cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                                wrapperStyle={{ pointerEvents: 'none' }}
+                                isAnimationActive={true}
+                                animationDuration={200}
+                            />
+                            <Bar 
+                                dataKey={yearMetric} 
+                                fill={yearMetric === 'films' ? '#00e054' : yearMetric === 'rating' ? '#40bcf4' : '#ff8000'} 
+                                radius={[2, 2, 0, 0]} 
+                                maxBarSize={40} 
+                                activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                                animationDuration={1000}
+                                animationEasing="ease-out"
+                            />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+             {/* 3. Highest Rated Decades */}
+             <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
+                <SectionHeader icon={Star} title="Highest Rated Decades" color="text-white" />
+                <div className="space-y-8">
+                    {stats.topDecades.map((decade) => (
+                        <div key={decade.name} className="flex flex-col md:flex-row gap-6">
+                            {/* Left: Decade Info */}
+                            <div className="w-full md:w-48 flex-shrink-0 flex flex-col justify-start pt-2">
+                                <span className="text-5xl font-light text-white mb-2">{decade.name}</span>
+                                <div className="flex items-center text-lb-text gap-1 text-sm">
+                                    <Star className="w-3 h-3 text-lb-green fill-current" />
+                                    <span>Average {decade.average.toFixed(2)}</span>
+                                </div>
+                                <span className="text-xs text-gray-500 mt-1">{decade.count} films</span>
+                            </div>
+
+                            {/* Right: Posters */}
+                            <div className="flex-grow">
+                                <div className="flex flex-wrap gap-2">
+                                    {decade.topMovies.map((movie, idx) => (
+                                        <div key={`${movie.tmdb_id}-${idx}`} className="relative group w-[70px] md:w-[90px] aspect-[2/3] bg-gray-800 rounded overflow-hidden shadow-lg hover:ring-2 hover:ring-lb-green transition-all cursor-default transform hover:-translate-y-1 hover:z-10 duration-200">
+                                            {movie.poster_path ? (
+                                                <img 
+                                                    src={`https://image.tmdb.org/t/p/w154${movie.poster_path}`} 
+                                                    alt={movie.Name}
+                                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 p-1 text-center bg-gray-900">
+                                                    {movie.Name}
+                                                </div>
+                                            )}
+                                            {/* Hover Rating */}
+                                            <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+                                                <div className="text-center">
+                                                    <span className="block text-lb-green font-bold text-lg scale-0 group-hover:scale-100 transition-transform delay-75">{movie.Rating}</span>
+                                                    <span className="block text-[10px] text-white/80 line-clamp-2 px-1">{movie.Name}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
              </div>
 
-             {/* 3. Ratings Profile */}
+             {/* 4. Ratings Profile */}
              <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
                 <SectionHeader icon={BarChart3} title="Ratings Profile" color="text-lb-orange" />
                 <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={stats.ratingsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.3} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.2} />
                             <XAxis dataKey="label" tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
                             <YAxis tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
-                            <Tooltip content={<CustomTooltip />} cursor={{fill: '#445566', opacity: 0.2}} />
-                            <Bar dataKey="value" fill="#ff8000" radius={[2, 2, 0, 0]} />
+                            <Tooltip 
+                                content={<MemoizedCustomTooltip />} 
+                                cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                                wrapperStyle={{ pointerEvents: 'none' }}
+                                isAnimationActive={true}
+                                animationDuration={200}
+                            />
+                            <Bar 
+                                dataKey="value" 
+                                fill="#ff8000" 
+                                radius={[2, 2, 0, 0]} 
+                                activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                                animationDuration={1000}
+                                animationEasing="ease-out"
+                            />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
              </div>
 
-             {/* 4. Genres & Countries */}
+             {/* 5. Genres & Countries */}
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
                     <SectionHeader icon={BarChart3} title="Top Genres" color="text-lb-blue" />
                     <div className="h-[400px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.genresData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.3} />
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
-                                <Tooltip content={<CustomTooltip />} cursor={{fill: '#445566', opacity: 0.2}} />
-                                <Bar dataKey="value" fill="#40bcf4" radius={[0, 2, 2, 0]} barSize={20} />
+                                <Tooltip 
+                                    content={<MemoizedCustomTooltip />} 
+                                    cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                                    wrapperStyle={{ pointerEvents: 'none' }}
+                                    isAnimationActive={true}
+                                    animationDuration={200}
+                                />
+                                <Bar 
+                                    dataKey="value" 
+                                    fill="#40bcf4" 
+                                    radius={[0, 4, 4, 0]} 
+                                    barSize={20} 
+                                    activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                                    animationDuration={1000}
+                                    animationEasing="ease-out"
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -505,44 +602,86 @@ const App: React.FC = () => {
                     <div className="h-[400px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.countriesData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.3} />
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
-                                <Tooltip content={<CustomTooltip />} cursor={{fill: '#445566', opacity: 0.2}} />
-                                <Bar dataKey="value" fill="#00e054" radius={[0, 2, 2, 0]} barSize={20} />
+                                <Tooltip 
+                                    content={<MemoizedCustomTooltip />} 
+                                    cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                                    wrapperStyle={{ pointerEvents: 'none' }}
+                                    isAnimationActive={true}
+                                    animationDuration={200}
+                                />
+                                <Bar 
+                                    dataKey="value" 
+                                    fill="#00e054" 
+                                    radius={[0, 4, 4, 0]} 
+                                    barSize={20} 
+                                    activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                                    animationDuration={1000}
+                                    animationEasing="ease-out"
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
              </div>
 
-             {/* 5. Stars & Directors */}
+             {/* 6. Directors & Stars */}
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                    <SectionHeader icon={Users} title="Top Stars" color="text-lb-orange" />
+                    <SectionHeader icon={Users} title="Top Directors" color="text-lb-blue" />
                     <div className="h-[400px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.actorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.3} />
+                            <BarChart data={stats.directorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
-                                <Tooltip content={<CustomTooltip />} cursor={{fill: '#445566', opacity: 0.2}} />
-                                <Bar dataKey="value" fill="#ff8000" radius={[0, 2, 2, 0]} barSize={20} />
+                                <Tooltip 
+                                    content={<MemoizedCustomTooltip />} 
+                                    cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                                    wrapperStyle={{ pointerEvents: 'none' }}
+                                    isAnimationActive={true}
+                                    animationDuration={200}
+                                />
+                                <Bar 
+                                    dataKey="value" 
+                                    fill="#40bcf4" 
+                                    radius={[0, 4, 4, 0]} 
+                                    barSize={20} 
+                                    activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                                    animationDuration={1000}
+                                    animationEasing="ease-out"
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
                 <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                    <SectionHeader icon={Users} title="Top Directors" color="text-lb-blue" />
+                    <SectionHeader icon={Users} title="Top Stars" color="text-lb-orange" />
                     <div className="h-[400px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.directorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.3} />
+                            <BarChart data={stats.actorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
-                                <Tooltip content={<CustomTooltip />} cursor={{fill: '#445566', opacity: 0.2}} />
-                                <Bar dataKey="value" fill="#40bcf4" radius={[0, 2, 2, 0]} barSize={20} />
+                                <Tooltip 
+                                    content={<MemoizedCustomTooltip />} 
+                                    cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                                    wrapperStyle={{ pointerEvents: 'none' }}
+                                    isAnimationActive={true}
+                                    animationDuration={200}
+                                />
+                                <Bar 
+                                    dataKey="value" 
+                                    fill="#ff8000" 
+                                    radius={[0, 4, 4, 0]} 
+                                    barSize={20} 
+                                    activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                                    animationDuration={1000}
+                                    animationEasing="ease-out"
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
