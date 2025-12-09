@@ -5,9 +5,9 @@ import {
   CartesianGrid,
 } from 'recharts';
 import Layout from './components/Layout';
-import { parseCSV } from './utils/csvHelper';
 import { fetchTMDBData } from './services/tmdbService';
 import { EnrichedMovie, AppStatus } from './types';
+import { parseCSV } from './utils/csvHelper';
 
 // Constants
 const TMDB_API_KEY_STORAGE = 'tmdb_api_key';
@@ -38,22 +38,22 @@ const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel, starI
         unit = ' films';
     }
 
-    return (
-      <div className="bg-lb-surface border border-gray-600 p-3 rounded shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-50 text-xs text-white backdrop-blur-sm bg-opacity-95">
-        <div className="font-bold mb-1 text-sm flex items-center gap-1">
-            {label}
-            {isRatingLabel && <Star className="w-3.5 h-3.5 text-lb-green fill-current" />}
-        </div>
-        <div className="text-lb-green font-mono text-base flex items-baseline">
-          {value}
-          {showStarValue ? (
-            <Star className={`w-3.5 h-3.5 ${starIconColor || 'text-lb-orange'} fill-current ml-1 self-center`} />
-          ) : (
-            <span className="text-gray-400 text-xs ml-1">{unit}</span>
-          )}
-        </div>
-      </div>
-    );
+        return (
+            <div className="bg-lb-surface border border-gray-600 p-3 rounded shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-50 text-xs text-white backdrop-blur-sm bg-opacity-95">
+                <div className="font-bold mb-1 text-sm flex items-center gap-1">
+                        {label}
+                        {isRatingLabel && <Star className="w-3.5 h-3.5 text-lb-green fill-current" />}
+                </div>
+                <div className="text-lb-green font-mono text-base flex items-baseline">
+                    {value}
+                    {showStarValue ? (
+                        <Star className={`w-3.5 h-3.5 ${starIconColor || 'text-lb-orange'} fill-current ml-1 self-center`} />
+                    ) : (
+                        <span className="text-gray-400 text-xs ml-1">{unit}</span>
+                    )}
+                </div>
+            </div>
+        );
   }
   return null;
 };
