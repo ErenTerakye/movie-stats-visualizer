@@ -21,8 +21,13 @@ async function scrapeDiaryPage(username, page = 1) {
     page === 1
       ? `/${username}/diary/`
       : `/${username}/diary/page/${page}/`;
+  const url = `${LETTERBOXD_BASE}${path}`;
 
-  const html = await fetchHtml(`${LETTERBOXD_BASE}${path}`);
+  console.log('Fetching diary URL:', url);
+
+  const html = await fetchHtml(url);
+  console.log('HTML snippet:', html.slice(0, 200));
+
   const $ = cheerio.load(html);
 
   const entries = [];
