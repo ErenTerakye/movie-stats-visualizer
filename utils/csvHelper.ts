@@ -1,4 +1,4 @@
-import { LetterboxdEntry } from '../types.ts';
+import { LetterboxdEntry } from '../types';
 
 export const parseCSV = (text: string): LetterboxdEntry[] => {
   const lines = text.split('\n').filter(l => l.trim());
