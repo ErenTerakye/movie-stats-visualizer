@@ -23,7 +23,7 @@ const getLanguageName = (code: string) => {
 };
 
 // --- Custom Tooltip Component ---
-const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel }: any) => {
+const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel, starIconColor }: any) => {
   if (active && payload && payload.length) {
     let value = payload[0].value;
     let unit = '';
@@ -47,7 +47,7 @@ const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel }: any
         <div className="text-lb-green font-mono text-base flex items-baseline">
           {value}
           {showStarValue ? (
-            <Star className="w-3.5 h-3.5 text-lb-orange fill-current ml-1 self-center" />
+            <Star className={`w-3.5 h-3.5 ${starIconColor || 'text-lb-orange'} fill-current ml-1 self-center`} />
           ) : (
             <span className="text-gray-400 text-xs ml-1">{unit}</span>
           )}
@@ -639,7 +639,7 @@ const App: React.FC = () => {
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
-                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} />} 
+                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} starIconColor="text-lb-green" />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
                                     wrapperStyle={{ pointerEvents: 'none' }}
                                     isAnimationActive={true}
@@ -666,7 +666,7 @@ const App: React.FC = () => {
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
-                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} />} 
+                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} starIconColor="text-lb-green" />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
                                     wrapperStyle={{ pointerEvents: 'none' }}
                                     isAnimationActive={true}
@@ -693,7 +693,7 @@ const App: React.FC = () => {
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
-                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} />} 
+                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} starIconColor="text-lb-green" />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
                                     wrapperStyle={{ pointerEvents: 'none' }}
                                     isAnimationActive={true}
