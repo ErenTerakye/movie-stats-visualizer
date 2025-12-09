@@ -8,6 +8,22 @@ if (!TMDB_API_KEY) {
 
 const LETTERBOXD_BASE = 'https://letterboxd.com';
 
+// Normalize titles before sending them to TMDB search so that
+// minor punctuation/whitespace differences between Letterboxd and
+// TMDB (different dashes, quotes, etc.) don't hurt matching.
+function normalizeTitleForSearch(name) {
+  if (!name || typeof name !== 'string') return '';
+  return name
+    // Normalize various unicode dashes to a simple hyphen
+    .replace(/[\u2012-\u2015]/g, '-')
+    // Normalize fancy quotes to plain quotes
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    // Collapse multiple spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function fetchHtml(url) {
   const res = await fetch(url, {
     headers: {
@@ -111,7 +127,7 @@ function normalizeLetterboxdRating(text) {
   return String(value);
 }
 
-async function scrapeFullDiary(username, maxPages = 5) {
+async function scrapeFullDiary(username, maxPages = 10) {
   const allEntries = [];
   let page = 1;
   while (page <= maxPages) {
@@ -187,7 +203,7 @@ async function scrapeFilmsPage(username, page = 1) {
   return { entries, hasNext };
 }
 
-async function scrapeFullFilms(username, maxPages = 5) {
+async function scrapeFullFilms(username, maxPages = 20) {
   const allEntries = [];
   let page = 1;
   while (page <= maxPages) {
@@ -209,7 +225,8 @@ async function searchTMDB(movie) {
   const runSearch = async (path, extraParams = {}) => {
     const url = new URL(`https://api.themoviedb.org/3${path}`);
     const params = new URLSearchParams(baseParams.toString());
-    params.set('query', movie.Name);
+    const normalizedName = normalizeTitleForSearch(movie.Name);
+    params.set('query', normalizedName || movie.Name || '');
     Object.entries(extraParams).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
     });
