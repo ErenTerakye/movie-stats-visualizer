@@ -31,19 +31,58 @@ async function scrapeDiaryPage(username, page = 1) {
 
   const entries = [];
 
-  // Diary entries are represented by rows; selectors may need adjustment if Letterboxd changes
-  $('.diary-entry-row').each((_, el) => {
+  // Each diary row is a table row under #diary-table
+  $('#diary-table tbody tr.diary-entry-row').each((_, el) => {
     const row = $(el);
 
-    const filmLink = row.find('.film-title a');
-    const name = filmLink.text().trim();
-    const letterboxdUri = filmLink.attr('href') || '';
+    // Film title and base film link
+    const titleLink = row.find('.inline-production-masthead h2.name a');
+    const name = titleLink.text().trim();
 
-    const yearText = row.find('.diary-entry-year').text().trim();
-    const ratingEl = row.find('.rating');
-    const ratingText = ratingEl.attr('title') || ratingEl.text().trim();
+    // Prefer the generic film link from LazyPoster data attributes,
+    // fall back to the title link (which is user-specific)
+    let filmPath =
+      row.find('.react-component.figure').attr('data-item-link') ||
+      titleLink.attr('href') ||
+      '';
 
-    const dateText = row.find('.diary-entry-date').text().trim();
+    if (filmPath && !filmPath.startsWith('http')) {
+      filmPath = `${LETTERBOXD_BASE}${filmPath}`;
+    }
+
+    // Release year (displayed in its own column and within releasedate span)
+    const yearText =
+      row.find('td.col-releaseyear span').text().trim() ||
+      row.find('.releasedate a').first().text().trim();
+
+    // Full diary date can be derived from the day link URL:
+    // e.g. /username/diary/films/for/2025/11/29/
+    const dayLink = row.find('td.col-daydate a.daydate');
+    const dayHref = dayLink.attr('href') || '';
+    let dateText = '';
+    const dateMatch = dayHref.match(/for\/(\d{4})\/(\d{2})\/(\d{2})\//);
+    if (dateMatch) {
+      const [, year, month, day] = dateMatch;
+      dateText = `${year}-${month}-${day}`;
+    } else {
+      // Fallback to just the day number if parsing fails
+      dateText = dayLink.text().trim();
+    }
+
+    // Rating is stored as a class like "rating rated-8" (0-10, halves included)
+    const ratingEl = row.find('span.rating');
+    const ratingClass = ratingEl.attr('class') || '';
+    const ratingClassMatch = ratingClass.match(/rated-(\d+)/);
+    let rating = '';
+    if (ratingClassMatch) {
+      const value = parseInt(ratingClassMatch[1], 10);
+      if (!Number.isNaN(value)) {
+        rating = String(value / 2);
+      }
+    } else {
+      // Fallback to parsing star characters if needed
+      rating = normalizeLetterboxdRating(ratingEl.text().trim());
+    }
 
     if (!name) {
       return;
@@ -53,8 +92,8 @@ async function scrapeDiaryPage(username, page = 1) {
       Date: dateText,
       Name: name,
       Year: yearText,
-      LetterboxdURI: letterboxdUri ? `${LETTERBOXD_BASE}${letterboxdUri}` : '',
-      Rating: normalizeLetterboxdRating(ratingText),
+      LetterboxdURI: filmPath,
+      Rating: rating,
     });
   });
 
@@ -64,11 +103,12 @@ async function scrapeDiaryPage(username, page = 1) {
 
 function normalizeLetterboxdRating(text) {
   if (!text) return '';
-  // Letterboxd often uses stars like f31ff31ff31ff31f2bd0
-  // or fractional stars; here we try to parse to a 0-5 value
-  const starMatch = text.match(/([0-9](?:\.5)?)/);
-  if (starMatch) return starMatch[1];
-  return '';
+  // Ratings are rendered as stars (e.g. "★★★½"); count stars + optional half
+  const fullStars = (text.match(/★/g) || []).length;
+  const hasHalf = text.includes('½');
+  if (!fullStars && !hasHalf) return '';
+  const value = fullStars + (hasHalf ? 0.5 : 0);
+  return String(value);
 }
 
 async function scrapeFullDiary(username, maxPages = 5) {
