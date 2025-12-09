@@ -4,8 +4,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   CartesianGrid,
 } from 'recharts';
-import Layout from './components/Layout';
-import { EnrichedMovie, AppStatus } from './types';
+import Layout from './components/Layout.tsx';
+import { EnrichedMovie, AppStatus } from './types.ts';
 
 // --- CONFIGURATION ---
 // REPLACE THIS with your specific Vercel deployment URL from Step 1
@@ -107,7 +107,7 @@ const App: React.FC = () => {
         
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
-            throw new Error("Received non-JSON response from server. Check API URL.");
+            throw new Error("Received non-JSON response. Please check your Vercel deployment URL.");
         }
 
         if (!response.ok) {
@@ -117,7 +117,7 @@ const App: React.FC = () => {
 
         const result = await response.json();
         if (result.length === 0) {
-            setError("No diary entries found for this user (or profile is private).");
+            setError("No diary entries found. Please check the username or try again later.");
             setStatus('idle');
         } else {
             setData(result);

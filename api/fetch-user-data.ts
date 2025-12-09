@@ -11,12 +11,10 @@ interface EnrichedMovie {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // --- CORS Configuration ---
-  // Allow requests from anywhere (or restrict to your GitHub Pages URL in production)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -34,43 +32,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // 1. Scrape Letterboxd Diary
+    // Added User-Agent to avoid 403 Forbidden errors
     const letterboxdUrl = `https://letterboxd.com/${username}/films/diary/`;
-    const lbRes = await fetch(letterboxdUrl);
+    const lbRes = await fetch(letterboxdUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
     
     if (!lbRes.ok) {
         if (lbRes.status === 404) return res.status(404).json({ error: 'User not found' });
-        throw new Error('Failed to fetch Letterboxd profile');
+        return res.status(lbRes.status).json({ error: `Letterboxd Error: ${lbRes.statusText}` });
     }
 
     const html = await lbRes.text();
     
-    // Simple regex parser
+    // Improved Regex to capture the full TR row including attributes
+    // More flexible: allows whitespace between attributes
     const movies: any[] = [];
-    const rowRegex = /<tr class="[^"]*diary-entry-row[^"]*"([\s\S]*?)<\/tr>/g;
+    const rowRegex = /<tr[^>]+class="[^"]*diary-entry-row[^"]*"[^>]*>[\s\S]*?<\/tr>/g;
+    
     let match;
-
     while ((match = rowRegex.exec(html)) !== null) {
-        const rowContent = match[1];
+        const rowHtml = match[0];
         
-        const nameMatch = rowContent.match(/data-film-name="([^"]+)"/);
-        const slugMatch = rowContent.match(/data-film-slug="([^"]+)"/);
-        const name = nameMatch ? nameMatch[1] : '';
+        // Extract directly from data attributes on the TR tag
+        // \s* allows for potential spaces around equal signs or attributes
+        const nameMatch = rowHtml.match(/data-film-name\s*=\s*"([^"]+)"/);
+        const slugMatch = rowHtml.match(/data-film-slug\s*=\s*"([^"]+)"/);
+        const yearMatch = rowHtml.match(/data-film-release-year\s*=\s*"(\d+)"/);
+        const dateMatch = rowHtml.match(/data-viewing-date\s*=\s*"([^"]+)"/);
+        
+        const name = nameMatch ? nameMatch[1].replace(/&amp;/g, '&') : '';
         const slug = slugMatch ? slugMatch[1] : '';
-        
-        const yearMatch = rowContent.match(/td-released">(\d+)<\/td>/);
         const year = yearMatch ? yearMatch[1] : '';
-        
-        const dateMatch = rowContent.match(/href="\/[^/]+\/film\/[^/]+\/diary\/(\d{4}-\d{2}-\d{2})\/"/);
         const date = dateMatch ? dateMatch[1] : '';
 
-        const ratingMatch = rowContent.match(/rated-(\d+)/);
+        // Rating logic
+        // Look for rating class in the row or children
+        const ratingMatch = rowHtml.match(/rated-(\d+)/);
         const ratingVal = ratingMatch ? (parseInt(ratingMatch[1]) / 2).toString() : '';
 
         if (name && year) {
             movies.push({
-                Name: name.replace(/&amp;/g, '&'),
+                Name: name,
                 Year: year,
-                Date: date,
+                Date: date, // YYYY-MM-DD
                 Rating: ratingVal,
                 LetterboxdURI: `https://letterboxd.com/film/${slug}/`
             });
@@ -78,6 +85,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (movies.length === 0) {
+        // Fallback: Return empty array but log it for debugging
+        console.log("Regex found no matches. HTML preview:", html.substring(0, 500));
         return res.status(200).json([]);
     }
 

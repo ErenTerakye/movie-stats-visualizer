@@ -1,4 +1,4 @@
-import { EnrichedMovie, LetterboxdEntry } from '../types';
+import { EnrichedMovie, LetterboxdEntry } from '../types.ts';
 
 export const fetchTMDBData = async (
   movies: LetterboxdEntry[], 
