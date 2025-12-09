@@ -49,12 +49,13 @@
 {
   "imports": {
     "react-dom": "https://esm.sh/react-dom@18.2.0",
-    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
     "react": "https://esm.sh/react@18.2.0",
-    "react/": "https://esm.sh/react@18.2.0/",
     "lucide-react": "https://esm.sh/lucide-react@0.263.1",
     "recharts": "https://esm.sh/recharts@2.12.0?external=react,react-dom",
-    "@vercel/node": "https://esm.sh/@vercel/node@3.0.0"
+    "@vercel/node": "https://esm.sh/@vercel/node@3.0.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/"
   }
 }
 </script>
@@ -63,7 +64,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- Main Entry Point -->
-    <script type="text/babel" data-type="module" src="./index.tsx"></script>
+    <!-- Main Entry Point with specific presets for TypeScript support -->
+    <script type="text/babel" data-type="module" data-presets="env,react,typescript" src="./index.tsx"></script>
   </body>
 </html>

@@ -8,9 +8,7 @@ import Layout from './components/Layout.tsx';
 import { EnrichedMovie, AppStatus } from './types.ts';
 
 // --- CONFIGURATION ---
-// REPLACE THIS with your specific Vercel deployment URL from Step 1
-// Example: "https://my-letterboxd-app.vercel.app"
-// If testing locally with `vercel dev`, use "http://localhost:3000"
+// REPLACE THIS with your specific Vercel deployment URL
 const API_BASE_URL = "https://movie-stats-visualizer.vercel.app"; 
 
 // Helper for language display names
