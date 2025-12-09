@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Upload, Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Globe, Star } from 'lucide-react';
+import { Upload, Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Globe, Star, Languages } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   CartesianGrid,
@@ -12,15 +12,26 @@ import { EnrichedMovie, AppStatus } from './types';
 // Constants
 const TMDB_API_KEY_STORAGE = 'tmdb_api_key';
 
+// Helper for language display names
+const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
+const getLanguageName = (code: string) => {
+    try {
+        return languageNames.of(code) || code;
+    } catch (e) {
+        return code;
+    }
+};
+
 // --- Custom Tooltip Component ---
-const CustomTooltip = ({ active, payload, label, valueType }: any) => {
+const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel }: any) => {
   if (active && payload && payload.length) {
     let value = payload[0].value;
     let unit = '';
+    let showStarValue = false;
     
-    if (valueType === 'rating') {
+    if (valueType === 'rating' || valueType === 'rated') {
         value = Number(value).toFixed(2);
-        unit = '★';
+        showStarValue = true;
     } else if (valueType === 'minutes') {
         unit = ' mins';
     } else {
@@ -28,11 +39,19 @@ const CustomTooltip = ({ active, payload, label, valueType }: any) => {
     }
 
     return (
-      <div className="bg-lb-surface border border-gray-600 p-3 rounded shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-50 text-xs pointer-events-none backdrop-blur-sm bg-opacity-95">
-        <p className="text-white font-bold mb-1 text-sm">{label}</p>
-        <p className="text-lb-green font-mono text-base">
-          {value}<span className="text-gray-400 text-xs ml-1">{unit}</span>
-        </p>
+      <div className="bg-lb-surface border border-gray-600 p-3 rounded shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-50 text-xs text-white backdrop-blur-sm bg-opacity-95">
+        <div className="font-bold mb-1 text-sm flex items-center gap-1">
+            {label}
+            {isRatingLabel && <Star className="w-3.5 h-3.5 text-lb-green fill-current" />}
+        </div>
+        <div className="text-lb-green font-mono text-base flex items-baseline">
+          {value}
+          {showStarValue ? (
+            <Star className="w-3.5 h-3.5 text-lb-orange fill-current ml-1 self-center" />
+          ) : (
+            <span className="text-gray-400 text-xs ml-1">{unit}</span>
+          )}
+        </div>
       </div>
     );
   }
@@ -71,6 +90,7 @@ const App: React.FC = () => {
   
   // Chart Toggles
   const [yearMetric, setYearMetric] = useState<'films' | 'rating' | 'diary'>('films');
+  const [gclMetric, setGclMetric] = useState<'watched' | 'rated'>('watched');
 
   // Handle File Upload & Processing
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,10 +158,13 @@ const App: React.FC = () => {
     }> = {};
 
     const ratingsMap: Record<string, number> = {};
-    const genresMap: Record<string, number> = {};
-    const countriesMap: Record<string, number> = {};
     const directorsMap: Record<string, number> = {};
     const actorsMap: Record<string, number> = {};
+    
+    // Aggregation maps for GCL (Genre, Country, Language)
+    const genresStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
+    const countriesStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
+    const languagesStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
     
     let totalRated = 0;
     let sumRating = 0;
@@ -159,8 +182,18 @@ const App: React.FC = () => {
         }
     };
 
+    // Helper to aggregate GCL stats
+    const aggGCL = (key: string, map: any, rating: string | undefined) => {
+        if (!map[key]) map[key] = { count: 0, sumRating: 0, ratedCount: 0 };
+        map[key].count += 1;
+        if (rating) {
+            map[key].sumRating += parseFloat(rating);
+            map[key].ratedCount += 1;
+        }
+    };
+
     data.forEach(movie => {
-      // 1. Release Year Stats (Films count, Ratings)
+      // 1. Release Year Stats
       if (movie.Year) {
         ensureYearEntry(movie.Year);
         const yStat = yearsDetailedMap[movie.Year];
@@ -190,7 +223,7 @@ const App: React.FC = () => {
         }
       }
 
-      // 2. Diary Stats (Logged Count based on 'Watched Date' or 'Date' column)
+      // 2. Diary Stats
       const watchedDate = movie['Watched Date'] || movie.Date;
       if (watchedDate) {
           const diaryYear = watchedDate.split('-')[0];
@@ -209,33 +242,27 @@ const App: React.FC = () => {
 
       // Genres
       if (movie.genres) {
-        movie.genres.forEach(g => {
-          genresMap[g.name] = (genresMap[g.name] || 0) + 1;
-        });
+        movie.genres.forEach(g => aggGCL(g.name, genresStats, movie.Rating));
       }
 
       // Countries
       if (movie.production_countries) {
         movie.production_countries.forEach(c => {
            const name = c.iso_3166_1 === 'US' ? 'USA' : 
-                        c.iso_3166_1 === 'GB' ? 'UK' : c.iso_3166_1;
-           countriesMap[name] = (countriesMap[name] || 0) + 1;
+                        c.iso_3166_1 === 'GB' ? 'UK' : c.name;
+           aggGCL(name, countriesStats, movie.Rating);
         });
       }
-      
-      // Directors
-      if (movie.directors) {
-          movie.directors.forEach(d => {
-              directorsMap[d.name] = (directorsMap[d.name] || 0) + 1;
-          });
-      }
 
-      // Actors
-      if (movie.cast) {
-          movie.cast.forEach(a => {
-              actorsMap[a.name] = (actorsMap[a.name] || 0) + 1;
-          });
+      // Languages
+      if (movie.original_language) {
+          const langName = getLanguageName(movie.original_language);
+          aggGCL(langName, languagesStats, movie.Rating);
       }
+      
+      // Directors & Actors
+      movie.directors?.forEach(d => { directorsMap[d.name] = (directorsMap[d.name] || 0) + 1; });
+      movie.cast?.forEach(a => { actorsMap[a.name] = (actorsMap[a.name] || 0) + 1; });
 
       // Runtime
       if (movie.runtime) {
@@ -243,7 +270,7 @@ const App: React.FC = () => {
       }
     });
 
-    // Format for Recharts / UI
+    // Format Years
     const yearsData = Object.entries(yearsDetailedMap)
       .map(([name, stat]) => ({ 
           name, 
@@ -253,11 +280,10 @@ const App: React.FC = () => {
       }))
       .sort((a, b) => parseInt(a.name) - parseInt(b.name));
 
-    // Process Top Decades for Showcase
+    // Top Decades
     const topDecades = Object.entries(decadesDetailedMap)
         .map(([name, stat]) => {
             const ratedMoviesWithPoster = stat.movies.filter(m => m.Rating && m.poster_path);
-            
             return {
                 name,
                 average: stat.count > 0 ? stat.sumRating / stat.count : 0,
@@ -275,16 +301,20 @@ const App: React.FC = () => {
         .map(([name, value]) => ({ name: parseFloat(name), value, label: name }))
         .sort((a, b) => a.name - b.name);
     
-    const genresData = Object.entries(genresMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
+    // Process GCL Data (Genres, Countries, Languages)
+    const processGCL = (map: any) => {
+        return Object.entries(map).map(([name, stat]: any) => ({
+            name,
+            count: stat.count,
+            average: stat.ratedCount > 0 ? stat.sumRating / stat.ratedCount : 0,
+            ratedCount: stat.ratedCount
+        }));
+    };
 
-    const countriesData = Object.entries(countriesMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-      
+    const genresData = processGCL(genresStats);
+    const countriesData = processGCL(countriesStats);
+    const languagesData = processGCL(languagesStats);
+
     const directorsData = Object.entries(directorsMap)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
@@ -304,6 +334,7 @@ const App: React.FC = () => {
         ratingsData, 
         genresData, 
         countriesData, 
+        languagesData,
         directorsData, 
         actorsData, 
         averageRating, 
@@ -311,13 +342,27 @@ const App: React.FC = () => {
     };
   }, [data]);
 
+  // Helper to sort GCL data based on metric
+  const getSortedGCL = useCallback((data: any[], metric: 'watched' | 'rated') => {
+      if (metric === 'watched') {
+          return [...data].sort((a, b) => b.count - a.count).slice(0, 10);
+      } else {
+          // For rating, filter items with at least 3 rated films to avoid noise
+          return [...data]
+              .filter(item => item.ratedCount >= 3)
+              .sort((a, b) => b.average - a.average)
+              .slice(0, 10);
+      }
+  }, []);
+
+  const isProcessing = status === 'parsing' || status === 'fetching';
 
   return (
     <Layout>
       {/* Header */}
       <header className={`text-center border-b border-lb-surface pb-8 transition-all duration-500 ${status === 'ready' ? 'mb-8' : 'mb-12'}`}>
         <div className="flex items-center justify-center gap-3 mb-4">
-          <Film className="w-10 h-10 text-lb-green animate-bounce" />
+          <Film className={`w-10 h-10 text-lb-green ${isProcessing ? 'animate-bounce' : ''}`} />
           <h1 className="text-4xl font-bold text-white tracking-tight">
             Letterboxd <span className="text-lb-blue">Stats</span>
           </h1>
@@ -425,7 +470,7 @@ const App: React.FC = () => {
                 </button>
              </div>
 
-             {/* 1. Overview Cards (3 columns) */}
+             {/* 1. Overview Cards */}
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard icon={Film} title="Total Films" value={data.length} color="text-lb-green" />
                 <StatCard icon={Clock} title="Hours Watched" value={stats.totalHours.toLocaleString()} color="text-lb-orange" subtext="Approximate runtime" />
@@ -434,7 +479,6 @@ const App: React.FC = () => {
 
              {/* 2. Timeline (Years) */}
              <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                {/* Header with Tabs */}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-bold text-white tracking-widest uppercase">By Year</span>
@@ -495,7 +539,6 @@ const App: React.FC = () => {
                 <div className="space-y-8">
                     {stats.topDecades.map((decade) => (
                         <div key={decade.name} className="flex flex-col md:flex-row gap-6">
-                            {/* Left: Decade Info */}
                             <div className="w-full md:w-48 flex-shrink-0 flex flex-col justify-start pt-2">
                                 <span className="text-5xl font-light text-white mb-2">{decade.name}</span>
                                 <div className="flex items-center text-lb-text gap-1 text-sm">
@@ -504,8 +547,6 @@ const App: React.FC = () => {
                                 </div>
                                 <span className="text-xs text-gray-500 mt-1">{decade.count} films</span>
                             </div>
-
-                            {/* Right: Posters */}
                             <div className="flex-grow">
                                 <div className="flex flex-wrap gap-2">
                                     {decade.topMovies.map((movie, idx) => (
@@ -521,7 +562,6 @@ const App: React.FC = () => {
                                                     {movie.Name}
                                                 </div>
                                             )}
-                                            {/* Hover Rating */}
                                             <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
                                                 <div className="text-center">
                                                     <span className="block text-lb-green font-bold text-lg scale-0 group-hover:scale-100 transition-transform delay-75">{movie.Rating}</span>
@@ -547,7 +587,7 @@ const App: React.FC = () => {
                             <XAxis dataKey="label" tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
                             <YAxis tick={{ fill: '#99aabb', fontSize: 12 }} tickLine={false} axisLine={false} />
                             <Tooltip 
-                                content={<MemoizedCustomTooltip />} 
+                                content={<MemoizedCustomTooltip isRatingLabel={true} />} 
                                 cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
                                 wrapperStyle={{ pointerEvents: 'none' }}
                                 isAnimationActive={true}
@@ -566,25 +606,74 @@ const App: React.FC = () => {
                 </div>
              </div>
 
-             {/* 5. Genres & Countries */}
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                    <SectionHeader icon={BarChart3} title="Top Genres" color="text-lb-blue" />
-                    <div className="h-[400px] w-full">
+             {/* 5. Genres, Countries & Languages (Combined) */}
+             <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+                 {/* Combined Header */}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold text-white tracking-widest uppercase">Genres, Countries & Languages</span>
+                    </div>
+                    <div className="hidden md:block h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
+                    <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase self-end md:self-auto">
+                        <button 
+                            onClick={() => setGclMetric('watched')}
+                            className={`${gclMetric === 'watched' ? 'text-lb-blue' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+                        >
+                            Most Watched
+                        </button>
+                        <button 
+                            onClick={() => setGclMetric('rated')}
+                            className={`${gclMetric === 'rated' ? 'text-lb-orange' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+                        >
+                            Highest Rated
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 overflow-x-auto min-w-[600px] pb-4">
+                    {/* Genres */}
+                    <div className="h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.genresData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
+                            <BarChart data={getSortedGCL(stats.genresData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
-                                    content={<MemoizedCustomTooltip />} 
+                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
                                     wrapperStyle={{ pointerEvents: 'none' }}
                                     isAnimationActive={true}
                                     animationDuration={200}
                                 />
                                 <Bar 
-                                    dataKey="value" 
+                                    dataKey={gclMetric === 'watched' ? 'count' : 'average'} 
+                                    fill="#00e054" 
+                                    radius={[0, 4, 4, 0]} 
+                                    barSize={20} 
+                                    activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                                    animationDuration={1000}
+                                    animationEasing="ease-out"
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Countries */}
+                    <div className="h-[400px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={getSortedGCL(stats.countriesData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <Tooltip 
+                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} />} 
+                                    cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                                    wrapperStyle={{ pointerEvents: 'none' }}
+                                    isAnimationActive={true}
+                                    animationDuration={200}
+                                />
+                                <Bar 
+                                    dataKey={gclMetric === 'watched' ? 'count' : 'average'} 
                                     fill="#40bcf4" 
                                     radius={[0, 4, 4, 0]} 
                                     barSize={20} 
@@ -595,26 +684,24 @@ const App: React.FC = () => {
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
-                </div>
 
-                <div className="bg-lb-surface p-6 rounded-xl shadow-lg border border-gray-800">
-                    <SectionHeader icon={Globe} title="Production Countries" color="text-lb-green" />
-                    <div className="h-[400px] w-full">
+                    {/* Languages */}
+                    <div className="h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.countriesData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
+                            <BarChart data={getSortedGCL(stats.languagesData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
                                 <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={100} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                                <YAxis dataKey="name" type="category" width={90} tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
                                 <Tooltip 
-                                    content={<MemoizedCustomTooltip />} 
+                                    content={<MemoizedCustomTooltip valueType={gclMetric === 'rated' ? 'rated' : 'count'} />} 
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
                                     wrapperStyle={{ pointerEvents: 'none' }}
                                     isAnimationActive={true}
                                     animationDuration={200}
                                 />
                                 <Bar 
-                                    dataKey="value" 
-                                    fill="#00e054" 
+                                    dataKey={gclMetric === 'watched' ? 'count' : 'average'} 
+                                    fill="#ff8000" 
                                     radius={[0, 4, 4, 0]} 
                                     barSize={20} 
                                     activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
