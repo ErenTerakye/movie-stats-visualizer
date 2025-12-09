@@ -11,7 +11,7 @@ import { EnrichedMovie, AppStatus } from './types';
 // REPLACE THIS with your specific Vercel deployment URL from Step 1
 // Example: "https://my-letterboxd-app.vercel.app"
 // If testing locally with `vercel dev`, use "http://localhost:3000"
-const API_BASE_URL = "https://YOUR-VERCEL-PROJECT-NAME.vercel.app"; 
+const API_BASE_URL = "https://movie-stats-visualizer.vercel.app"; 
 
 // Helper for language display names
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
