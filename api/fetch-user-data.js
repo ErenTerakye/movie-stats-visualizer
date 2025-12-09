@@ -127,6 +127,78 @@ async function scrapeFullDiary(username, maxPages = 5) {
   return allEntries;
 }
 
+// Scrape a single films page ("Watched" grid) and return entries + whether a next page exists
+async function scrapeFilmsPage(username, page = 1) {
+  const path = page === 1
+    ? `/${username}/films/`
+    : `/${username}/films/page/${page}/`;
+
+  const html = await fetchHtml(`${LETTERBOXD_BASE}${path}`);
+  const $ = cheerio.load(html);
+
+  const entries = [];
+
+  // Each film is a grid item under .poster-grid
+  $('.poster-grid ul.grid li.griditem').each((_, el) => {
+    const item = $(el);
+
+    const posterComponent = item.find('.react-component[data-component-class="LazyPoster"]');
+    if (!posterComponent.length) return;
+
+    const fullName = posterComponent.attr('data-item-full-display-name') || '';
+    const name = posterComponent.attr('data-item-name') || fullName;
+    if (!name) return;
+
+    let filmPath = posterComponent.attr('data-item-link') || '';
+    if (filmPath && !filmPath.startsWith('http')) {
+      filmPath = `${LETTERBOXD_BASE}${filmPath}`;
+    }
+
+    // Year is at the end of full display name, e.g. "Title (2025)"
+    let yearText = '';
+    const yearMatch = fullName.match(/\((\d{4})\)\s*$/);
+    if (yearMatch) {
+      yearText = yearMatch[1];
+    }
+
+    const ratingEl = item.find('p.poster-viewingdata span.rating');
+    const ratingClass = ratingEl.attr('class') || '';
+    const ratingClassMatch = ratingClass.match(/rated-(\d+)/);
+    let rating = '';
+    if (ratingClassMatch) {
+      const value = parseInt(ratingClassMatch[1], 10);
+      if (!Number.isNaN(value)) {
+        rating = String(value / 2);
+      }
+    } else {
+      rating = normalizeLetterboxdRating(ratingEl.text().trim());
+    }
+
+    entries.push({
+      Date: '', // Films page does not expose a specific watch date
+      Name: name,
+      Year: yearText,
+      LetterboxdURI: filmPath,
+      Rating: rating,
+    });
+  });
+
+  const hasNext = $('.paginate-nextprev .next').length > 0;
+  return { entries, hasNext };
+}
+
+async function scrapeFullFilms(username, maxPages = 5) {
+  const allEntries = [];
+  let page = 1;
+  while (page <= maxPages) {
+    const { entries, hasNext } = await scrapeFilmsPage(username, page);
+    allEntries.push(...entries);
+    if (!hasNext) break;
+    page += 1;
+  }
+  return allEntries;
+}
+
 async function enrichWithTMDB(entries) {
   if (!TMDB_API_KEY) {
     throw new Error('TMDB_API_KEY is not configured on the server.');
@@ -210,13 +282,46 @@ export default async function handler(req, res) {
 
   try {
     const diaryEntries = await scrapeFullDiary(username);
+    let filmEntries = [];
 
-    if (!diaryEntries.length) {
-      res.status(404).json({ error: 'No diary entries found. Profile may be private or username invalid.' });
+    try {
+      filmEntries = await scrapeFullFilms(username);
+    } catch (filmErr) {
+      console.error('Failed to scrape films page', filmErr);
+    }
+
+    if (!diaryEntries.length && !filmEntries.length) {
+      res.status(404).json({ error: 'No diary or films entries found. Profile may be private or username invalid.' });
       return;
     }
 
-    const enriched = await enrichWithTMDB(diaryEntries);
+    // Merge diary and films: diary wins; add films-only titles and optionally fill missing fields from films
+    const byUri = new Map();
+
+    for (const entry of diaryEntries) {
+      if (!entry.LetterboxdURI) continue;
+      byUri.set(entry.LetterboxdURI, { ...entry });
+    }
+
+    for (const entry of filmEntries) {
+      if (!entry.LetterboxdURI) continue;
+      const existing = byUri.get(entry.LetterboxdURI);
+      if (!existing) {
+        byUri.set(entry.LetterboxdURI, { ...entry });
+      } else {
+        // If diary entry is missing rating/year but films entry has them, fill in
+        if ((!existing.Rating || existing.Rating === '') && entry.Rating) {
+          existing.Rating = entry.Rating;
+        }
+        if ((!existing.Year || existing.Year === '') && entry.Year) {
+          existing.Year = entry.Year;
+        }
+      }
+    }
+
+    const mergedEntries = Array.from(byUri.values());
+
+    const enriched = await enrichWithTMDB(mergedEntries);
 
     res.status(200).json({
       username,
