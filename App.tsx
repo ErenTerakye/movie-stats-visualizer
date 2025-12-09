@@ -254,9 +254,11 @@ const App: React.FC = () => {
           aggGCL(langName, languagesStats, movie.Rating);
       }
       
-      // Directors & Actors
-      movie.directors?.forEach(d => { directorsMap[d.name] = (directorsMap[d.name] || 0) + 1; });
-      movie.cast?.forEach(a => { actorsMap[a.name] = (actorsMap[a.name] || 0) + 1; });
+      // Directors & Actors (count only rated films to avoid noisy, unrated entries)
+      if (movie.Rating) {
+          movie.directors?.forEach(d => { directorsMap[d.name] = (directorsMap[d.name] || 0) + 1; });
+          movie.cast?.forEach(a => { actorsMap[a.name] = (actorsMap[a.name] || 0) + 1; });
+      }
 
       // Runtime
       if (movie.runtime) {
