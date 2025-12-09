@@ -1,16 +1,11 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Upload, Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Globe, Star, Languages } from 'lucide-react';
+import { Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Star } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   CartesianGrid,
 } from 'recharts';
 import Layout from './components/Layout';
-import { fetchTMDBData } from './services/tmdbService';
 import { EnrichedMovie, AppStatus } from './types';
-import { parseCSV } from './utils/csvHelper';
-
-// Constants
-const TMDB_API_KEY_STORAGE = 'tmdb_api_key';
 
 // Helper for language display names
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
@@ -83,7 +78,7 @@ const SectionHeader = ({ icon: Icon, title, color = "text-white" }: any) => (
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>('idle');
-  const [apiKey, setApiKey] = useState<string>(localStorage.getItem(TMDB_API_KEY_STORAGE) || '');
+    const [username, setUsername] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
   const [data, setData] = useState<EnrichedMovie[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -92,51 +87,48 @@ const App: React.FC = () => {
   const [yearMetric, setYearMetric] = useState<'films' | 'rating' | 'diary'>('films');
   const [gclMetric, setGclMetric] = useState<'watched' | 'rated'>('watched');
 
-  // Handle File Upload & Processing
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!apiKey) {
-      setError("Please enter a TMDB API Key first.");
-      return;
-    }
-
-    // Save key for convenience
-    localStorage.setItem(TMDB_API_KEY_STORAGE, apiKey);
-    setError(null);
-    setStatus('parsing');
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      if (!text) return;
-
-      try {
-        const rawMovies = parseCSV(text);
-        
-        if (rawMovies.length === 0) {
-            setError("No movies found in CSV. Check format.");
-            setStatus('idle');
+    // Fetch data from backend by Letterboxd username
+    const handleFetchByUsername = useCallback(async () => {
+        const trimmed = username.trim();
+        if (!trimmed) {
+            setError('Please enter a Letterboxd username.');
             return;
         }
 
+        setError(null);
         setStatus('fetching');
-        
-        const enrichedData = await fetchTMDBData(rawMovies, apiKey, (pct) => {
-          setProgress(pct);
-        });
+        setProgress(0);
 
-        setData(enrichedData);
-        setStatus('ready');
-      } catch (err) {
-        console.error(err);
-        setError("An error occurred while processing data.");
-        setStatus('idle');
-      }
-    };
-    reader.readAsText(file);
-  }, [apiKey]);
+        try {
+            const res = await fetch(`/api/fetch-user-data?username=${encodeURIComponent(trimmed)}`);
+            if (!res.ok) {
+                let message = 'Failed to fetch data from server.';
+                try {
+                    const body = await res.json();
+                    if (body && typeof body.error === 'string') {
+                        message = body.error;
+                    }
+                } catch {
+                    // ignore JSON parse errors and use default message
+                }
+                throw new Error(message);
+            }
+
+            const body = await res.json();
+            if (!body || !Array.isArray(body.movies) || body.movies.length === 0) {
+                throw new Error('No movies returned for this user.');
+            }
+
+            setData(body.movies as EnrichedMovie[]);
+            setStatus('ready');
+            setProgress(100);
+        } catch (err: any) {
+            console.error(err);
+            setError(err?.message || 'An error occurred while fetching data.');
+            setStatus('idle');
+            setProgress(0);
+        }
+    }, [username]);
 
   // --- Statistics Calculation ---
   const stats = useMemo(() => {
@@ -369,7 +361,7 @@ const App: React.FC = () => {
         </div>
         {status !== 'ready' && (
            <p className="text-lb-text max-w-xl mx-auto text-base md:text-lg px-4">
-             Visualize your movie watching habits. Export your data from Letterboxd and drop it below.
+                         Visualize your movie watching habits. Enter your Letterboxd username and we&apos;ll fetch and enrich your diary + films.
            </p>
         )}
       </header>
@@ -380,37 +372,27 @@ const App: React.FC = () => {
           <div className="max-w-xl mx-auto bg-lb-surface p-6 md:p-8 rounded-xl shadow-xl border border-gray-800 hover:border-gray-700 transition-colors">
             <div className="mb-6">
               <label className="block text-sm font-medium text-lb-text mb-2">
-                1. TMDB API Key
+                                Letterboxd Username
               </label>
               <input
-                type="text"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your TMDB Read Access Token or API Key"
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                placeholder="e.g. erenreel"
                 className="w-full bg-lb-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-lb-green transition-colors text-sm md:text-base"
               />
               <p className="text-xs text-gray-500 mt-2">
-                Required to fetch genre, country, cast, and crew data.
+                                We&apos;ll fetch your public diary and films, then enrich them with TMDB on the server.
               </p>
             </div>
 
             <div className="mb-2">
-              <label className="block text-sm font-medium text-lb-text mb-2">
-                2. Upload CSV
-              </label>
-              <div className="relative group">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileUpload}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                />
-                <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 md:p-8 text-center group-hover:border-lb-blue transition-colors bg-lb-bg group-hover:bg-gray-800">
-                  <Upload className="w-10 h-10 md:w-12 md:h-12 mx-auto text-gray-500 mb-4 group-hover:text-lb-blue transition-colors" />
-                  <p className="text-white font-medium text-sm md:text-base">Click or Drag CSV here</p>
-                  <p className="text-xs md:text-sm text-gray-500 mt-1">Exported from Letterboxd settings</p>
-                </div>
-              </div>
+                            <button
+                                onClick={handleFetchByUsername}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-lb-green hover:bg-emerald-500 rounded-lg text-sm md:text-base text-black font-semibold transition-colors shadow-lg shadow-emerald-500/20"
+                            >
+                                Fetch Stats
+                            </button>
             </div>
 
             {error && (
@@ -423,7 +405,7 @@ const App: React.FC = () => {
         )}
 
         {/* Processing State */}
-        {(status === 'parsing' || status === 'fetching') && (
+                {status === 'fetching' && (
           <div className="max-w-xl mx-auto text-center py-10 md:py-20">
             <div className="mb-6 relative w-20 h-20 md:w-24 md:h-24 mx-auto">
                 <div className="absolute inset-0 border-4 border-lb-surface rounded-full"></div>
@@ -432,10 +414,10 @@ const App: React.FC = () => {
                 ></div>
             </div>
             <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
-                {status === 'parsing' ? 'Parsing CSV...' : 'Fetching Data...'}
+                Fetching Data...
             </h2>
             <p className="text-lb-text mb-6 text-sm md:text-base">
-                Analyzing {status === 'fetching' ? 'metadata, credits, and runtimes' : 'file'}.
+                Fetching your diary and films, then analyzing metadata, credits, and runtimes.
             </p>
             
             <div className="w-full bg-lb-surface rounded-full h-3 md:h-4 overflow-hidden">
