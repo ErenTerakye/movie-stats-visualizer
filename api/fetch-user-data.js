@@ -294,42 +294,60 @@ export default async function handler(req, res) {
   }
 
   try {
-    const diaryEntries = await scrapeFullDiary(username);
+    // 1) Fetch films first (primary source of what you've rated/watched)
     let filmEntries = [];
-
     try {
       filmEntries = await scrapeFullFilms(username);
     } catch (filmErr) {
       console.error('Failed to scrape films page', filmErr);
     }
 
-    if (!diaryEntries.length && !filmEntries.length) {
-      res.status(404).json({ error: 'No diary or films entries found. Profile may be private or username invalid.' });
+    // 2) Fetch diary separately (used mainly for per-year diary stats)
+    const diaryEntries = await scrapeFullDiary(username);
+
+    if (!filmEntries.length && !diaryEntries.length) {
+      res.status(404).json({ error: 'No films or diary entries found. Profile may be private or username invalid.' });
       return;
     }
 
-    // Merge diary and films: diary wins; add films-only titles and optionally fill missing fields from films
+    // Build a map from the films grid first; this is our canonical
+    // list of movies (most data lives here, including ratings that
+    // may not be present in the diary).
     const byUri = new Map();
 
-    for (const entry of diaryEntries) {
+    for (const entry of filmEntries) {
       if (!entry.LetterboxdURI) continue;
       byUri.set(entry.LetterboxdURI, { ...entry });
     }
 
-    for (const entry of filmEntries) {
+    // Overlay diary info: use it for watch dates / diary-based
+    // stats, but do not overwrite film ratings/years if they exist.
+    for (const entry of diaryEntries) {
       if (!entry.LetterboxdURI) continue;
       const existing = byUri.get(entry.LetterboxdURI);
+
       if (!existing) {
+        // Films page might not list every logged diary item
         byUri.set(entry.LetterboxdURI, { ...entry });
-      } else {
-        // If diary entry is missing rating/year but films entry has them, fill in
-        if ((!existing.Rating || existing.Rating === '') && entry.Rating) {
-          existing.Rating = entry.Rating;
-        }
-        if ((!existing.Year || existing.Year === '') && entry.Year) {
-          existing.Year = entry.Year;
-        }
+        continue;
       }
+
+      // Prefer the film grid's rating/year; only fill if missing.
+      const merged = { ...existing };
+      if (!merged.Rating && entry.Rating) {
+        merged.Rating = entry.Rating;
+      }
+      if (!merged.Year && entry.Year) {
+        merged.Year = entry.Year;
+      }
+
+      // Always preserve the diary watch date separately so the
+      // frontend can use it for "by year" diary stats.
+      if (entry.Date) {
+        merged.Date = entry.Date;
+      }
+
+      byUri.set(entry.LetterboxdURI, merged);
     }
 
     const mergedEntries = Array.from(byUri.values());
