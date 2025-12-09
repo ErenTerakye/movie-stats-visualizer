@@ -19,8 +19,8 @@ async function fetchHtml(url) {
 async function scrapeDiaryPage(username, page = 1) {
   const path =
     page === 1
-      ? `/${username}/films/diary/`
-      : `/${username}/films/diary/page/${page}/`;
+      ? `/${username}/diary/`
+      : `/${username}/diary/page/${page}/`;
 
   const html = await fetchHtml(`${LETTERBOXD_BASE}${path}`);
   const $ = cheerio.load(html);
