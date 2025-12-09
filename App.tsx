@@ -100,7 +100,9 @@ const App: React.FC = () => {
         setProgress(0);
 
         try {
-            const res = await fetch(`/api/fetch-user-data?username=${encodeURIComponent(trimmed)}`);
+            const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || '';
+            const url = `${apiBase}/api/fetch-user-data?username=${encodeURIComponent(trimmed)}`;
+            const res = await fetch(url);
             if (!res.ok) {
                 let message = 'Failed to fetch data from server.';
                 try {

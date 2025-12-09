@@ -11,7 +11,7 @@ const LETTERBOXD_BASE = 'https://letterboxd.com';
 async function fetchHtml(url) {
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; LetterboxdStatsBot/1.0; +https://github.com/your-username)'
+      'User-Agent': 'Mozilla/5.0 (compatible; LetterboxdStatsBot/1.0; +https://github.com/ErenTerakye)'
     }
   });
   if (!res.ok) {
@@ -269,6 +269,19 @@ async function enrichWithTMDB(entries) {
 }
 
 export default async function handler(req, res) {
+  // Basic CORS support so the frontend on GitHub Pages (or other origins)
+  // can call this Vercel function.
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed. Use GET.' });
     return;
