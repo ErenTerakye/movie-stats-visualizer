@@ -23,8 +23,8 @@ async function fetchHtml(url) {
 // Scrape a single diary page and return entries + whether a next page exists
 async function scrapeDiaryPage(username, page = 1) {
   const path = page === 1
-    ? `/${username}/films/diary/`
-    : `/${username}/films/diary/page/${page}/`;
+    ? `/${username}/diary/`
+    : `/${username}/diary/page/${page}/`;
 
   const html = await fetchHtml(`${LETTERBOXD_BASE}${path}`);
   const $ = cheerio.load(html);
