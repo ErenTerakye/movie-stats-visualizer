@@ -27,12 +27,16 @@ export interface Director {
   name: string;
 }
 
-export interface EnrichedMovie {
-  Name: string;
-  Year: string;
-  Date: string;
-  LetterboxdURI: string;
-  Rating: string;
+export interface TMDBMovieResult {
+  id: number;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  original_language: string;
+  genres?: Genre[];
+  production_countries?: ProductionCountry[];
+}
+
+export interface EnrichedMovie extends LetterboxdEntry {
   poster_path?: string | null;
   backdrop_path?: string | null;
   genres?: Genre[];
