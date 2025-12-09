@@ -1,16 +1,15 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Upload, Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Globe, Star, Languages } from 'lucide-react';
+import { Search, Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Star, Languages } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   CartesianGrid,
 } from 'recharts';
 import Layout from './components/Layout';
-import { parseCSV } from './utils/csvHelper';
-import { fetchTMDBData } from './services/tmdbService';
 import { EnrichedMovie, AppStatus } from './types';
 
-// Constants
-const TMDB_API_KEY_STORAGE = 'tmdb_api_key';
+// CONFIGURATION
+// TODO: Replace this with your actual Vercel Project URL after deployment
+const API_BASE_URL = 'https://movie-stats-visualizer.vercel.app'; 
 
 // Helper for language display names
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
@@ -23,7 +22,7 @@ const getLanguageName = (code: string) => {
 };
 
 // --- Custom Tooltip Component ---
-const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel, starIconColor }: any) => {
+const MemoizedCustomTooltip = React.memo(({ active, payload, label, valueType, isRatingLabel, starIconColor }: any) => {
   if (active && payload && payload.length) {
     let value = payload[0].value;
     let unit = '';
@@ -39,7 +38,7 @@ const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel, starI
     }
 
     return (
-      <div className="bg-lb-surface border border-gray-600 p-3 rounded shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-50 text-xs text-white backdrop-blur-sm bg-opacity-95">
+      <div className="bg-lb-surface border border-gray-600 p-3 rounded shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-50 text-xs text-white backdrop-blur-sm bg-opacity-95 pointer-events-none">
         <div className="font-bold mb-1 text-sm flex items-center gap-1">
             {label}
             {isRatingLabel && <Star className="w-3.5 h-3.5 text-lb-green fill-current" />}
@@ -56,10 +55,7 @@ const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel, starI
     );
   }
   return null;
-};
-
-// Memoized custom tooltip
-const MemoizedCustomTooltip = React.memo(CustomTooltip);
+});
 
 const StatCard = ({ icon: Icon, title, value, subtext, color = "text-white" }: any) => (
     <div className="bg-lb-surface p-4 md:p-5 rounded-lg border border-gray-800 shadow-lg flex flex-col justify-between hover:border-gray-600 transition-colors duration-300">
@@ -83,8 +79,7 @@ const SectionHeader = ({ icon: Icon, title, color = "text-white" }: any) => (
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>('idle');
-  const [apiKey, setApiKey] = useState<string>(localStorage.getItem(TMDB_API_KEY_STORAGE) || '');
-  const [progress, setProgress] = useState<number>(0);
+  const [username, setUsername] = useState<string>('');
   const [data, setData] = useState<EnrichedMovie[]>([]);
   const [error, setError] = useState<string | null>(null);
   
@@ -92,51 +87,41 @@ const App: React.FC = () => {
   const [yearMetric, setYearMetric] = useState<'films' | 'rating' | 'diary'>('films');
   const [gclMetric, setGclMetric] = useState<'watched' | 'rated'>('watched');
 
-  // Handle File Upload & Processing
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!apiKey) {
-      setError("Please enter a TMDB API Key first.");
+  // Handle Fetch
+  const handleFetchData = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim()) {
+      setError("Please enter a username.");
       return;
     }
 
-    // Save key for convenience
-    localStorage.setItem(TMDB_API_KEY_STORAGE, apiKey);
     setError(null);
-    setStatus('parsing');
+    setStatus('fetching');
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      if (!text) return;
-
-      try {
-        const rawMovies = parseCSV(text);
-        
-        if (rawMovies.length === 0) {
-            setError("No movies found in CSV. Check format.");
-            setStatus('idle');
-            return;
-        }
-
-        setStatus('fetching');
-        
-        const enrichedData = await fetchTMDBData(rawMovies, apiKey, (pct) => {
-          setProgress(pct);
-        });
-
-        setData(enrichedData);
-        setStatus('ready');
-      } catch (err) {
-        console.error(err);
-        setError("An error occurred while processing data.");
-        setStatus('idle');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/fetch-user-data?username=${encodeURIComponent(username)}`);
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to fetch user data');
       }
-    };
-    reader.readAsText(file);
-  }, [apiKey]);
+
+      const enrichedData = await response.json();
+      
+      if (enrichedData.length === 0) {
+        setError("No diary entries found for this user (or profile is private).");
+        setStatus('idle');
+        return;
+      }
+
+      setData(enrichedData);
+      setStatus('ready');
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "An error occurred while communicating with the server.");
+      setStatus('idle');
+    }
+  }, [username]);
 
   // --- Statistics Calculation ---
   const stats = useMemo(() => {
@@ -161,7 +146,7 @@ const App: React.FC = () => {
     const directorsMap: Record<string, number> = {};
     const actorsMap: Record<string, number> = {};
     
-    // Aggregation maps for GCL (Genre, Country, Language)
+    // Aggregation maps for GCL
     const genresStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
     const countriesStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
     const languagesStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
@@ -170,19 +155,12 @@ const App: React.FC = () => {
     let sumRating = 0;
     let totalRuntimeMinutes = 0;
 
-    // Helper to ensure map entry exists
     const ensureYearEntry = (year: string) => {
         if (!yearsDetailedMap[year]) {
-            yearsDetailedMap[year] = { 
-                diaryCount: 0, 
-                sumRating: 0, 
-                ratedCount: 0, 
-                uniqueMovies: new Set() 
-            };
+            yearsDetailedMap[year] = { diaryCount: 0, sumRating: 0, ratedCount: 0, uniqueMovies: new Set() };
         }
     };
 
-    // Helper to aggregate GCL stats
     const aggGCL = (key: string, map: any, rating: string | undefined) => {
         if (!map[key]) map[key] = { count: 0, sumRating: 0, ratedCount: 0 };
         map[key].count += 1;
@@ -224,7 +202,7 @@ const App: React.FC = () => {
       }
 
       // 2. Diary Stats
-      const watchedDate = movie['Watched Date'] || movie.Date;
+      const watchedDate = movie['Date']; // Mapped from scraping logic
       if (watchedDate) {
           const diaryYear = watchedDate.split('-')[0];
           if (diaryYear && !isNaN(parseInt(diaryYear))) {
@@ -234,7 +212,7 @@ const App: React.FC = () => {
       }
 
       // Ratings
-      if (movie.Rating) {
+      if (movie.Rating && movie.Rating !== '0') {
         ratingsMap[movie.Rating] = (ratingsMap[movie.Rating] || 0) + 1;
         totalRated++;
         sumRating += parseFloat(movie.Rating);
@@ -342,12 +320,10 @@ const App: React.FC = () => {
     };
   }, [data]);
 
-  // Helper to sort GCL data based on metric
   const getSortedGCL = useCallback((data: any[], metric: 'watched' | 'rated') => {
       if (metric === 'watched') {
           return [...data].sort((a, b) => b.count - a.count).slice(0, 10);
       } else {
-          // For rating, filter items with at least 3 rated films to avoid noise
           return [...data]
               .filter(item => item.ratedCount >= 3)
               .sort((a, b) => b.average - a.average)
@@ -369,7 +345,7 @@ const App: React.FC = () => {
         </div>
         {status !== 'ready' && (
            <p className="text-lb-text max-w-xl mx-auto text-base md:text-lg px-4">
-             Visualize your movie watching habits. Export your data from Letterboxd and drop it below.
+             Enter your username to visualize your recently watched movies.
            </p>
         )}
       </header>
@@ -378,40 +354,32 @@ const App: React.FC = () => {
       <main className="w-full">
         {status === 'idle' && (
           <div className="max-w-xl mx-auto bg-lb-surface p-6 md:p-8 rounded-xl shadow-xl border border-gray-800 hover:border-gray-700 transition-colors">
-            <div className="mb-6">
+            
+            <form onSubmit={handleFetchData} className="mb-2">
               <label className="block text-sm font-medium text-lb-text mb-2">
-                1. TMDB API Key
+                Letterboxd Username
               </label>
-              <input
-                type="text"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your TMDB Read Access Token or API Key"
-                className="w-full bg-lb-bg border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-lb-green transition-colors text-sm md:text-base"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Required to fetch genre, country, cast, and crew data.
-              </p>
-            </div>
-
-            <div className="mb-2">
-              <label className="block text-sm font-medium text-lb-text mb-2">
-                2. Upload CSV
-              </label>
-              <div className="relative group">
+              <div className="relative">
                 <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileUpload}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="e.g. rowan"
+                    className="w-full bg-lb-bg border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:border-lb-green transition-colors text-sm md:text-base"
                 />
-                <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 md:p-8 text-center group-hover:border-lb-blue transition-colors bg-lb-bg group-hover:bg-gray-800">
-                  <Upload className="w-10 h-10 md:w-12 md:h-12 mx-auto text-gray-500 mb-4 group-hover:text-lb-blue transition-colors" />
-                  <p className="text-white font-medium text-sm md:text-base">Click or Drag CSV here</p>
-                  <p className="text-xs md:text-sm text-gray-500 mt-1">Exported from Letterboxd settings</p>
-                </div>
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
               </div>
-            </div>
+              
+              <button 
+                type="submit"
+                className="w-full mt-4 bg-lb-green hover:bg-green-500 text-black font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                Get Stats
+              </button>
+            </form>
+            <p className="text-xs text-center text-gray-500 mt-4">
+                Fetches your most recent 50 diary entries.
+            </p>
 
             {error && (
               <div className="mt-6 p-4 bg-red-900/20 border border-red-900/50 rounded-lg flex items-center gap-3 text-red-200">
@@ -423,7 +391,7 @@ const App: React.FC = () => {
         )}
 
         {/* Processing State */}
-        {(status === 'parsing' || status === 'fetching') && (
+        {status === 'fetching' && (
           <div className="max-w-xl mx-auto text-center py-10 md:py-20">
             <div className="mb-6 relative w-20 h-20 md:w-24 md:h-24 mx-auto">
                 <div className="absolute inset-0 border-4 border-lb-surface rounded-full"></div>
@@ -432,19 +400,11 @@ const App: React.FC = () => {
                 ></div>
             </div>
             <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
-                {status === 'parsing' ? 'Parsing CSV...' : 'Fetching Data...'}
+                Fetching Data...
             </h2>
             <p className="text-lb-text mb-6 text-sm md:text-base">
-                Analyzing {status === 'fetching' ? 'metadata, credits, and runtimes' : 'file'}.
+                Scraping Letterboxd and enriching with TMDB metadata.
             </p>
-            
-            <div className="w-full bg-lb-surface rounded-full h-3 md:h-4 overflow-hidden">
-                <div 
-                    className="bg-lb-green h-full transition-all duration-300 ease-out"
-                    style={{ width: `${progress}%` }}
-                ></div>
-            </div>
-            <p className="mt-2 text-right text-sm text-lb-green font-mono">{progress}%</p>
           </div>
         )}
 
@@ -455,18 +415,18 @@ const App: React.FC = () => {
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-2xl md:text-3xl font-bold text-white">Your Dashboard</h2>
-                    <p className="text-lb-text text-sm">Analysis of {data.length} films</p>
+                    <p className="text-lb-text text-sm">Analysis of {data.length} recent films</p>
                 </div>
                 <button 
                     onClick={() => {
                         setStatus('idle');
                         setData([]);
-                        setProgress(0);
+                        setUsername('');
                     }}
                     className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-lb-surface hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-600 shadow-sm hover:shadow"
                 >
                     <RotateCcw className="w-4 h-4" />
-                    Start Over
+                    Search Another User
                 </button>
              </div>
 
