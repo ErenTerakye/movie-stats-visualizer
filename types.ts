@@ -17,6 +17,16 @@ export interface ProductionCountry {
   name: string;
 }
 
+export interface CastMember {
+  id: number;
+  name: string;
+}
+
+export interface Director {
+  id: number;
+  name: string;
+}
+
 export interface TMDBMovieResult {
   id: number;
   poster_path: string | null;
@@ -33,6 +43,9 @@ export interface EnrichedMovie extends LetterboxdEntry {
   production_countries?: ProductionCountry[];
   original_language?: string;
   tmdb_id?: number;
+  runtime?: number;
+  directors?: Director[];
+  cast?: CastMember[];
   notFound?: boolean;
   error?: boolean;
 }

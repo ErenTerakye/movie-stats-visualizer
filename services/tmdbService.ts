@@ -9,8 +9,8 @@ export const fetchTMDBData = async (
   const total = movies.length;
   let count = 0;
 
-  // Process in chunks to prevent browser freeze and manage rate limits
-  const CHUNK_SIZE = 5; 
+  // Reduced chunk size and increased delay to avoid 429 Rate Limit errors
+  const CHUNK_SIZE = 3; 
   
   for (let i = 0; i < total; i += CHUNK_SIZE) {
     const chunk = movies.slice(i, i + CHUNK_SIZE);
@@ -20,15 +20,31 @@ export const fetchTMDBData = async (
         // 1. Search for basic details
         const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(movie.Name)}&year=${movie.Year}`;
         const searchRes = await fetch(searchUrl);
+        
+        if (!searchRes.ok) throw new Error(`Search failed: ${searchRes.statusText}`);
+        
         const searchData = await searchRes.json();
         
         if (searchData.results && searchData.results.length > 0) {
             const match = searchData.results[0];
             
-            // 2. Fetch Details for "Countries" and extra genres
-            const detailsUrl = `https://api.themoviedb.org/3/movie/${match.id}?api_key=${apiKey}`;
+            // 2. Fetch Details including Credits (Cast/Crew) and Runtime
+            const detailsUrl = `https://api.themoviedb.org/3/movie/${match.id}?api_key=${apiKey}&append_to_response=credits`;
             const detailsRes = await fetch(detailsUrl);
+            
+            if (!detailsRes.ok) throw new Error(`Details failed: ${detailsRes.statusText}`);
+            
             const detailsData = await detailsRes.json();
+
+            // Extract Directors (Crew with job 'Director')
+            const directors = detailsData.credits?.crew
+                ?.filter((person: any) => person.job === 'Director')
+                .map((d: any) => ({ id: d.id, name: d.name })) || [];
+
+            // Extract Top Cast (first 10)
+            const cast = detailsData.credits?.cast
+                ?.slice(0, 10)
+                .map((c: any) => ({ id: c.id, name: c.name })) || [];
 
             return {
                 ...movie,
@@ -37,7 +53,10 @@ export const fetchTMDBData = async (
                 genres: detailsData.genres || [],
                 production_countries: detailsData.production_countries || [],
                 original_language: match.original_language,
-                tmdb_id: match.id
+                tmdb_id: match.id,
+                runtime: detailsData.runtime || 0,
+                directors,
+                cast
             } as EnrichedMovie;
         }
         return { ...movie, notFound: true } as EnrichedMovie;
@@ -53,8 +72,8 @@ export const fetchTMDBData = async (
     count += chunk.length;
     onProgress(Math.min(100, Math.round((count / total) * 100)));
     
-    // Slight delay to respect API rate limits
-    await new Promise(r => setTimeout(r, 200));
+    // Increased delay to respect API rate limits (approx 300ms between chunks)
+    await new Promise(r => setTimeout(r, 300));
   }
   
   return enriched;
