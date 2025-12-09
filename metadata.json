@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Letterboxd Stats Visualizer",
+  "description": "A serverless React application that generates comprehensive Letterboxd profile statistics and visualizations using client-side CSV parsing and the TMDB API.",
+  "requestFramePermissions": []
+}
