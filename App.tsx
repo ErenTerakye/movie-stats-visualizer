@@ -275,16 +275,19 @@ const App: React.FC = () => {
       .sort((a, b) => parseInt(a.name) - parseInt(b.name));
 
     // Top Decades
+    // Uses only rated films and selects the user's top 3 decades,
+    // showing up to 12 highest-rated films per decade.
     const topDecades = Object.entries(decadesDetailedMap)
         .map(([name, stat]) => {
-            const ratedMoviesWithPoster = stat.movies.filter(m => m.Rating && m.poster_path);
+            const ratedMovies = stat.movies.filter(m => m.Rating);
+            const ratedMoviesWithPoster = ratedMovies.filter(m => m.poster_path);
             return {
                 name,
                 average: stat.count > 0 ? stat.sumRating / stat.count : 0,
                 count: stat.count,
                 topMovies: ratedMoviesWithPoster
                     .sort((a, b) => parseFloat(b.Rating) - parseFloat(a.Rating))
-                    .slice(0, 12) 
+                    .slice(0, 12)
             };
         })
         .filter(d => d.count >= 3)
