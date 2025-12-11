@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Film, BarChart3, AlertCircle, RotateCcw, Clock, Users, Star } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -86,6 +86,32 @@ const App: React.FC = () => {
   // Chart Toggles
   const [yearMetric, setYearMetric] = useState<'films' | 'rating' | 'diary'>('films');
   const [gclMetric, setGclMetric] = useState<'watched' | 'rated'>('watched');
+
+    // Smooth, approximate progress bar while fetching from the backend
+    useEffect(() => {
+        if (status !== 'fetching') {
+            if (status === 'ready') {
+                setProgress(100);
+            }
+            return;
+        }
+
+        // Start from a small non-zero value so the user sees movement
+        setProgress((prev) => (prev <= 0 ? 5 : prev));
+
+        const intervalId = window.setInterval(() => {
+            setProgress((prev) => {
+                if (prev >= 90) return prev; // cap until final completion
+                // Slightly slower as it approaches the cap
+                const increment = prev < 50 ? 5 : prev < 75 ? 3 : 1;
+                return Math.min(prev + increment, 90);
+            });
+        }, 400);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [status]);
 
     // Fetch data from backend by Letterboxd username
     const handleFetchByUsername = useCallback(async () => {
