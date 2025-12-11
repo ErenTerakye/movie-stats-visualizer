@@ -91,8 +91,11 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
     let lbPosterUrl = null;
     try {
       // Try a few likely selectors to locate the main poster image
-      let posterImg =
-        main$('.film-poster img').first();
+      let posterImg = main$('div.poster.film-poster img').first();
+
+      if (!posterImg || !posterImg.length) {
+        posterImg = main$('.film-poster img').first();
+      }
 
       if (!posterImg || !posterImg.length) {
         posterImg = main$('.poster img').first();
@@ -103,16 +106,48 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
       }
 
       if (posterImg && posterImg.length) {
-        const rawSrc =
-          posterImg.attr('data-src') ||
-          posterImg.attr('src') ||
+        const EMPTY_POSTER_FRAGMENT = 'empty-poster';
+
+        const normalizeUrl = (u) => {
+          if (!u) return null;
+          const trimmed = u.trim();
+          if (!trimmed || trimmed.includes(EMPTY_POSTER_FRAGMENT)) return null;
+          if (trimmed.startsWith('http')) return trimmed;
+          if (trimmed.startsWith('//')) return `https:${trimmed}`;
+          return trimmed;
+        };
+
+        // Some Letterboxd HTML uses srcset/data-srcset with the real poster
+        // and puts an "empty-poster" placeholder in src. Prefer srcset first.
+        const rawSrcset =
+          posterImg.attr('data-srcset') ||
+          posterImg.attr('srcset') ||
           '';
-        if (rawSrc) {
-          lbPosterUrl = rawSrc.startsWith('http')
-            ? rawSrc
-            : rawSrc.startsWith('//')
-              ? `https:${rawSrc}`
-              : `${rawSrc}`;
+
+        if (rawSrcset) {
+          const candidates = rawSrcset
+            .split(',')
+            .map((part) => part.trim().split(' ')[0])
+            .filter(Boolean);
+
+          for (const candidate of candidates) {
+            const url = normalizeUrl(candidate);
+            if (url) {
+              lbPosterUrl = url;
+              break;
+            }
+          }
+        }
+
+        if (!lbPosterUrl) {
+          const rawSrc =
+            posterImg.attr('data-src') ||
+            posterImg.attr('src') ||
+            '';
+          const url = normalizeUrl(rawSrc);
+          if (url) {
+            lbPosterUrl = url;
+          }
         }
       }
     } catch (posterErr) {
