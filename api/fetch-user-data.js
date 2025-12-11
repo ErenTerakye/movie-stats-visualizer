@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { Redis } from '@upstash/redis';
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
@@ -7,6 +8,33 @@ if (!TMDB_API_KEY) {
 }
 
 const LETTERBOXD_BASE = 'https://letterboxd.com';
+
+// Lazily-initialized Upstash Redis client. If the required
+// environment variables are missing (e.g. locally without
+// integration), caching will be skipped safely.
+let redis = null;
+function getRedisClient() {
+  if (redis) return redis;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    return null;
+  }
+
+  redis = new Redis({ url, token });
+  return redis;
+}
+
+// Simple versioned cache key helper so we can invalidate all
+// previously cached payloads by bumping CACHE_VERSION.
+const CACHE_VERSION = 'v1';
+const CACHE_TTL_SECONDS = 60 * 60 * 6; // 6 hours
+
+function buildUserCacheKey(username) {
+  return `letterboxd-stats:${CACHE_VERSION}:user:${String(username).toLowerCase()}`;
+}
 
 // Normalize titles before sending them to TMDB search so that
 // minor punctuation/whitespace differences between Letterboxd and
@@ -603,6 +631,26 @@ export default async function handler(req, res) {
     return;
   }
 
+  const cacheKey = buildUserCacheKey(username);
+
+  // Optional flag to force a refresh and bypass the cache, e.g.
+  // /api/fetch-user-data?username=foo&forceRefresh=true
+  const forceRefresh = String(req.query.forceRefresh || '').toLowerCase() === 'true';
+
+  const redisClient = getRedisClient();
+
+  if (!forceRefresh && redisClient) {
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached && typeof cached === 'object' && Array.isArray(cached.movies)) {
+        res.status(200).json(cached);
+        return;
+      }
+    } catch (cacheErr) {
+      console.warn('Redis cache get failed, continuing without cache:', cacheErr);
+    }
+  }
+
   try {
     // 1) Fetch films first (primary source of what you've rated/watched)
     let filmEntries = [];
@@ -667,11 +715,24 @@ export default async function handler(req, res) {
     const withLetterboxdDetails = await enrichWithLetterboxdDetails(mergedEntries);
     const enriched = await enrichWithTMDB(withLetterboxdDetails);
 
-    res.status(200).json({
+    const payload = {
       username,
       movies: enriched,
       count: enriched.length,
-    });
+    };
+
+    // Store the full enriched payload in Redis so repeat requests
+    // for the same user are fast and avoid re-scraping
+    // Letterboxd/TMDB.
+    if (redisClient) {
+      try {
+        await redisClient.set(cacheKey, payload, { ex: CACHE_TTL_SECONDS });
+      } catch (cacheErr) {
+        console.warn('Redis cache set failed, continuing without cache:', cacheErr);
+      }
+    }
+
+    res.status(200).json(payload);
   } catch (err) {
     console.error('Failed to fetch user data', err);
     res.status(500).json({ error: 'Internal server error while fetching user data.' });
