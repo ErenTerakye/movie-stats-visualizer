@@ -37,13 +37,33 @@ function getRedisClient() {
   return redis;
 }
 
-// Simple versioned cache key helper so we can invalidate all
-// previously cached payloads by bumping CACHE_VERSION.
+// Simple versioned cache key helpers so we can invalidate cached
+// payloads by bumping CACHE_VERSION.
 const CACHE_VERSION = 'v1';
-const CACHE_TTL_SECONDS = 60 * 60 * 6; // 6 hours
+
+// How long to cache the fully-enriched per-user payload.
+const USER_CACHE_TTL_SECONDS = 60 * 60 * 6; // 6 hours
+
+// How long to cache per-film Letterboxd metadata and TMDB
+// enrichment. These can safely live longer because film metadata
+// changes rarely.
+const FILM_LB_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const FILM_TMDB_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 function buildUserCacheKey(username) {
   return `letterboxd-stats:${CACHE_VERSION}:user:${String(username).toLowerCase()}`;
+}
+
+function buildFilmLetterboxdCacheKey(letterboxdUri) {
+  const normalized = normalizeFilmUrl(letterboxdUri || '');
+  return `letterboxd-stats:${CACHE_VERSION}:film:lbmeta:${encodeURIComponent(normalized)}`;
+}
+
+function buildFilmTmdbCacheKey(movie) {
+  const normalizedName = normalizeTitleForSearch(movie.Name || '');
+  const year = movie.Year || '';
+  const base = `${normalizedName || movie.Name || ''}::${year}`;
+  return `letterboxd-stats:${CACHE_VERSION}:film:tmdb:${encodeURIComponent(base)}`;
 }
 
 // Normalize titles before sending them to TMDB search so that
@@ -526,15 +546,41 @@ async function enrichWithTMDB(entries) {
   const result = [];
   const CHUNK_SIZE = 3;
 
+  const redisClient = getRedisClient();
+
   for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
     const chunk = entries.slice(i, i + CHUNK_SIZE);
 
     const enrichedChunk = await Promise.all(chunk.map(async (movie) => {
+      const cacheKey = redisClient ? buildFilmTmdbCacheKey(movie) : null;
+
+      // Try per-film TMDB cache first.
+      if (redisClient && cacheKey) {
+        try {
+          const cached = await redisClient.get(cacheKey);
+          if (cached && typeof cached === 'object') {
+            return { ...movie, ...cached };
+          }
+        } catch (cacheErr) {
+          console.warn('Redis TMDB film cache get failed for', movie.Name, cacheErr);
+        }
+      }
+
       try {
         const { match, mediaType } = await searchTMDB(movie);
 
         if (!match || !mediaType) {
-          return { ...movie, notFound: true };
+          const tmdbPayload = { notFound: true };
+
+          if (redisClient && cacheKey) {
+            try {
+              await redisClient.set(cacheKey, tmdbPayload, { ex: FILM_TMDB_CACHE_TTL_SECONDS });
+            } catch (cacheErr) {
+              console.warn('Redis TMDB film cache set failed for', movie.Name, cacheErr);
+            }
+          }
+
+          return { ...movie, ...tmdbPayload };
         }
 
         const typePath = mediaType === 'tv' ? 'tv' : 'movie';
@@ -563,8 +609,7 @@ async function enrichWithTMDB(entries) {
           runtime = detailsData.episode_run_time[0];
         }
 
-        return {
-          ...movie,
+        const tmdbPayload = {
           poster_path: match.poster_path,
           backdrop_path: match.backdrop_path,
           genres: detailsData.genres || [],
@@ -575,9 +620,29 @@ async function enrichWithTMDB(entries) {
           directors,
           cast,
         };
+
+        if (redisClient && cacheKey) {
+          try {
+            await redisClient.set(cacheKey, tmdbPayload, { ex: FILM_TMDB_CACHE_TTL_SECONDS });
+          } catch (cacheErr) {
+            console.warn('Redis TMDB film cache set failed for', movie.Name, cacheErr);
+          }
+        }
+
+        return { ...movie, ...tmdbPayload };
       } catch (err) {
         console.error('TMDB enrichment failed for', movie.Name, err);
-        return { ...movie, error: true };
+        const tmdbPayload = { error: true };
+
+        if (redisClient && cacheKey) {
+          try {
+            await redisClient.set(cacheKey, tmdbPayload, { ex: FILM_TMDB_CACHE_TTL_SECONDS });
+          } catch (cacheErr) {
+            console.warn('Redis TMDB film cache set failed for', movie.Name, cacheErr);
+          }
+        }
+
+        return { ...movie, ...tmdbPayload };
       }
     }));
 
@@ -593,14 +658,41 @@ async function enrichWithTMDB(entries) {
 async function enrichWithLetterboxdDetails(entries) {
   const result = [];
   const CHUNK_SIZE = 3;
+  const redisClient = getRedisClient();
 
   for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
     const chunk = entries.slice(i, i + CHUNK_SIZE);
 
     const enrichedChunk = await Promise.all(chunk.map(async (movie) => {
       if (!movie.LetterboxdURI) return movie;
+
+      const cacheKey = redisClient
+        ? buildFilmLetterboxdCacheKey(movie.LetterboxdURI)
+        : null;
+
+      // Try per-film Letterboxd metadata cache first.
+      if (redisClient && cacheKey) {
+        try {
+          const cached = await redisClient.get(cacheKey);
+          if (cached && typeof cached === 'object') {
+            return { ...movie, ...cached };
+          }
+        } catch (cacheErr) {
+          console.warn('Redis LB film cache get failed for', movie.Name, cacheErr);
+        }
+      }
+
       try {
         const meta = await scrapeLetterboxdFilmMeta(movie.LetterboxdURI);
+
+        if (redisClient && cacheKey) {
+          try {
+            await redisClient.set(cacheKey, meta, { ex: FILM_LB_CACHE_TTL_SECONDS });
+          } catch (cacheErr) {
+            console.warn('Redis LB film cache set failed for', movie.Name, cacheErr);
+          }
+        }
+
         return { ...movie, ...meta };
       } catch (err) {
         console.error('Letterboxd details enrichment failed for', movie.Name, err);
@@ -736,7 +828,7 @@ export default async function handler(req, res) {
     // Letterboxd/TMDB.
     if (redisClient) {
       try {
-        await redisClient.set(cacheKey, payload, { ex: CACHE_TTL_SECONDS });
+        await redisClient.set(cacheKey, payload, { ex: USER_CACHE_TTL_SECONDS });
       } catch (cacheErr) {
         console.warn('Redis cache set failed, continuing without cache:', cacheErr);
       }

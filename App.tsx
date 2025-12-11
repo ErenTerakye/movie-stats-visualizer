@@ -188,7 +188,7 @@ const App: React.FC = () => {
           <React.Suspense
             fallback={
               <div className="max-w-xl mx-auto text-center py-10 md:py-16">
-                <div className="mb-4 text-lb-text text-sm md:text-base">Loading dashboardeee</div>
+                <div className="mb-4 text-lb-text text-sm md:text-base">Loading dashboard...</div>
                 <div className="w-full bg-lb-surface rounded-full h-3 md:h-4 overflow-hidden">
                   <div className="bg-lb-green h-full w-1/3 animate-pulse" />
                 </div>
