@@ -110,9 +110,11 @@ const SectionHeader = ({ icon: Icon, title, color = "text-white" }: any) => (
 interface DashboardProps {
   data: EnrichedMovie[];
   onReset: () => void;
+  onRefresh: () => void;
+  lastUpdated: Date | null;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, onReset, onRefresh, lastUpdated }) => {
   const [yearMetric, setYearMetric] = useState<'films' | 'rating' | 'diary'>('films');
   const [gclMetric, setGclMetric] = useState<'watched' | 'rated'>('watched');
   const [crewMetric, setCrewMetric] = useState<'watched' | 'rated'>('watched');
@@ -459,6 +461,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
   const crewSectionsMostWatchedOrdered = orderCrewSectionsForUI(stats.crewSectionsMostWatched);
   const crewSectionsHighestRatedOrdered = orderCrewSectionsForUI(stats.crewSectionsHighestRated);
 
+  const handleSectionScroll = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
   return (
     <div className="animate-[fadeIn_0.5s_ease-out] pb-20 space-y-6 md:space-y-8">
       {/* Action Bar */}
@@ -466,25 +475,62 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-white">Your Dashboard</h2>
           <p className="text-lb-text text-sm">Analysis of {data.length} films</p>
+          {lastUpdated && (
+            <p className="text-xs text-gray-500 mt-1">
+              Last updated: {lastUpdated.toLocaleString()}
+            </p>
+          )}
         </div>
-        <button 
-          onClick={onReset}
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-lb-surface hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-600 shadow-sm hover:shadow"
-        >
-          <RotateCcw className="w-4 h-4" />
-          Start Over
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <button
+            onClick={onRefresh}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-lb-surface hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-600 shadow-sm hover:shadow"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Refresh data
+          </button>
+          <button
+            onClick={onReset}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-lb-surface/60 hover:bg-gray-700 rounded-lg text-sm text-white transition-colors border border-gray-700 shadow-sm"
+          >
+            Start over
+          </button>
+        </div>
       </div>
 
+      {/* Sections Nav */}
+      <nav className="mt-2 mb-4 md:mb-6 border-b border-gray-800 pb-2 overflow-x-auto">
+        <div className="flex gap-3 text-xs md:text-[13px] text-gray-400 whitespace-nowrap">
+          {[
+            { id: 'overview', label: 'Overview' },
+            { id: 'years', label: 'Years' },
+            { id: 'decades', label: 'Decades' },
+            { id: 'ratings', label: 'Ratings' },
+            { id: 'gcl', label: 'Genres / Countries / Languages' },
+            { id: 'people', label: 'Directors & Stars' },
+            { id: 'crews', label: 'Crews & Studios' },
+          ].map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => handleSectionScroll(section.id)}
+              className="px-2 py-1 rounded-full bg-transparent hover:bg-white/5 text-xs md:text-[13px] text-gray-400 hover:text-white transition-colors"
+            >
+              {section.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       {/* 1. Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+      <div id="overview" className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 scroll-mt-28">
         <StatCard icon={Film} title="Total Films" value={data.length} color="text-lb-green" />
         <StatCard icon={Clock} title="Hours Watched" value={stats.totalHours.toLocaleString()} color="text-lb-orange" subtext="Approximate runtime" />
         <StatCard icon={BarChart3} title="Avg Rating" value={stats.averageRating} color="text-lb-blue" />
       </div>
 
       {/* 2. Timeline (Years) */}
-      <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
+      <div id="years" className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 scroll-mt-28">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs font-bold text-white tracking-widest uppercase">By Year</span>
@@ -540,10 +586,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
       </div>
 
       {/* 3. Highest Rated Decades */}
-      <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
+      <div id="decades" className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 scroll-mt-28">
         <SectionHeader icon={Star} title="Highest Rated Decades" color="text-white" />
         <div className="space-y-6 md:space-y-8">
-          {stats.topDecades.map((decade: any) => (
+          {stats.topDecades.length === 0 ? (
+            <p className="text-sm text-gray-400">Not enough rated films with release years to compute decade stats yet.</p>
+          ) : (
+            stats.topDecades.map((decade: any) => (
             <div key={decade.name} className="flex flex-col md:flex-row gap-4 md:gap-6">
               <div className="w-full md:w-48 flex-shrink-0 flex flex-row md:flex-col justify-between md:justify-start items-center md:items-start pt-0 md:pt-2 border-b md:border-b-0 border-gray-800 pb-2 md:pb-0 mb-2 md:mb-0">
                 <span className="text-3xl md:text-5xl font-light text-white mb-0 md:mb-2">{decade.name}</span>
@@ -583,41 +632,46 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
                 </div>
               </div>
             </div>
-          ))}
+          )))
+          }
         </div>
       </div>
 
       {/* 4. Ratings Profile */}
-      <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
+      <div id="ratings" className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 scroll-mt-28">
         <SectionHeader icon={BarChart3} title="Ratings Profile" color="text-lb-orange" />
-        <div className="h-48 md:h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={stats.ratingsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.2} />
-              <XAxis dataKey="label" tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip 
-                content={<MemoizedCustomTooltip isRatingLabel={true} />} 
-                cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
-                wrapperStyle={{ pointerEvents: 'none' }}
-                isAnimationActive={true}
-                animationDuration={200}
-              />
-              <Bar 
-                dataKey="value" 
-                fill="#ff8000" 
-                radius={[2, 2, 0, 0]} 
-                activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
-                animationDuration={1000}
-                animationEasing="ease-out"
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {stats.ratingsData.length === 0 ? (
+          <p className="text-sm text-gray-400">No ratings found yet. Once you rate films on Letterboxd, your rating profile will appear here.</p>
+        ) : (
+          <div className="h-48 md:h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stats.ratingsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#445566" opacity={0.2} />
+                <XAxis dataKey="label" tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#99aabb', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip 
+                  content={<MemoizedCustomTooltip isRatingLabel={true} />} 
+                  cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }}
+                  wrapperStyle={{ pointerEvents: 'none' }}
+                  isAnimationActive={true}
+                  animationDuration={200}
+                />
+                <Bar 
+                  dataKey="value" 
+                  fill="#ff8000" 
+                  radius={[2, 2, 0, 0]} 
+                  activeBar={{ stroke: '#ffffff', strokeWidth: 1.5, strokeOpacity: 0.8 }}
+                  animationDuration={1000}
+                  animationEasing="ease-out"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* 5. Genres, Countries & Languages (Combined) */}
-      <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+      <div id="gcl" className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden scroll-mt-28">
         {/* Combined Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-3 md:gap-4">
           <div className="flex items-center gap-2 shrink-0">
@@ -643,6 +697,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-4">
           {/* Genres */}
           <div className="h-[300px] md:h-[400px]">
+            {getSortedGCL(stats.genresData, gclMetric).length === 0 ? (
+              <p className="text-sm text-gray-400">Not enough genre data yet.</p>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={getSortedGCL(stats.genresData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
@@ -666,10 +723,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           {/* Countries */}
           <div className="h-[300px] md:h-[400px]">
+            {getSortedGCL(stats.countriesData, gclMetric).length === 0 ? (
+              <p className="text-sm text-gray-400">Not enough country data yet.</p>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={getSortedGCL(stats.countriesData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
@@ -693,10 +754,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           {/* Languages */}
           <div className="h-[300px] md:h-[400px]">
+            {getSortedGCL(stats.languagesData, gclMetric).length === 0 ? (
+              <p className="text-sm text-gray-400">Not enough language data yet.</p>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={getSortedGCL(stats.languagesData, gclMetric)} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#445566" opacity={0.2} />
@@ -720,14 +785,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
 
       {/* 6. Directors & Stars */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+      <div id="people" className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 scroll-mt-28">
         <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
           <SectionHeader icon={Users} title="Top Directors" color="text-lb-blue" />
+          {stats.directorsData.length === 0 ? (
+            <p className="text-sm text-gray-400">No director stats yet. Once you rate some films, your most-watched directors will appear here.</p>
+          ) : (
           <div className="h-[300px] md:h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.directorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
@@ -753,10 +822,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          )}
         </div>
 
         <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
           <SectionHeader icon={Users} title="Top Stars" color="text-lb-orange" />
+          {stats.actorsData.length === 0 ? (
+            <p className="text-sm text-gray-400">No actor stats yet. Once you rate some films, your most-watched stars will appear here.</p>
+          ) : (
           <div className="h-[300px] md:h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.actorsData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 0 }}>
@@ -782,12 +855,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          )}
         </div>
       </div>
 
       {/* 7. Crews & Studios */}
       {crewSectionsMostWatchedOrdered.length > 0 && (
-        <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+        <div id="crews" className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden scroll-mt-28">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-3 md:gap-4">
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs font-bold text-white tracking-widest uppercase">Crews &amp; Studios</span>

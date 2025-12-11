@@ -17,10 +17,11 @@ const getLanguageName = (code: string) => {
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>('idle');
-    const [username, setUsername] = useState<string>('');
+  const [username, setUsername] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
   const [data, setData] = useState<EnrichedMovie[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     // Smooth, slower approximate progress bar while fetching from the backend
     useEffect(() => {
@@ -56,7 +57,7 @@ const App: React.FC = () => {
     }, [status]);
 
     // Fetch data from backend by Letterboxd username
-    const handleFetchByUsername = useCallback(async () => {
+    const handleFetchByUsername = useCallback(async (forceRefresh: boolean = false) => {
         const trimmed = username.trim();
         if (!trimmed) {
             setError('Please enter a Letterboxd username.');
@@ -69,7 +70,7 @@ const App: React.FC = () => {
 
         try {
             const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || '';
-            const url = `${apiBase}/api/fetch-user-data?username=${encodeURIComponent(trimmed)}`;
+            const url = `${apiBase}/api/fetch-user-data?username=${encodeURIComponent(trimmed)}${forceRefresh ? '&forceRefresh=true' : ''}`;
             const res = await fetch(url);
             if (!res.ok) {
                 let message = 'Failed to fetch data from server.';
@@ -88,10 +89,10 @@ const App: React.FC = () => {
             if (!body || !Array.isArray(body.movies) || body.movies.length === 0) {
                 throw new Error('No movies returned for this user.');
             }
-
             setData(body.movies as EnrichedMovie[]);
             setStatus('ready');
             setProgress(100);
+            setLastUpdated(new Date());
         } catch (err: any) {
             console.error(err);
             setError(err?.message || 'An error occurred while fetching data.');
@@ -141,7 +142,7 @@ const App: React.FC = () => {
 
             <div className="mb-2">
                             <button
-                                onClick={handleFetchByUsername}
+                              onClick={() => handleFetchByUsername(false)}
                                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-lb-green hover:bg-emerald-500 rounded-lg text-sm md:text-base text-black font-semibold transition-colors shadow-lg shadow-emerald-500/20"
                             >
                                 Fetch Stats
@@ -187,20 +188,28 @@ const App: React.FC = () => {
         {status === 'ready' && (
           <React.Suspense
             fallback={
-              <div className="max-w-xl mx-auto text-center py-10 md:py-16">
-                <div className="mb-4 text-lb-text text-sm md:text-base">Loading dashboard...</div>
-                <div className="w-full bg-lb-surface rounded-full h-3 md:h-4 overflow-hidden">
-                  <div className="bg-lb-green h-full w-1/3 animate-pulse" />
+              <div className="max-w-5xl mx-auto py-8 md:py-12 space-y-6 animate-pulse">
+                {/* Overview skeleton */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+                  <div className="h-20 md:h-24 rounded-lg bg-lb-surface border border-gray-800" />
+                  <div className="h-20 md:h-24 rounded-lg bg-lb-surface border border-gray-800" />
+                  <div className="h-20 md:h-24 rounded-lg bg-lb-surface border border-gray-800" />
                 </div>
+                {/* Chart skeletons */}
+                <div className="h-40 md:h-56 rounded-xl bg-lb-surface border border-gray-800" />
+                <div className="h-40 md:h-56 rounded-xl bg-lb-surface border border-gray-800" />
               </div>
             }
           >
             <Dashboard
               data={data}
+              lastUpdated={lastUpdated}
+              onRefresh={() => handleFetchByUsername(true)}
               onReset={() => {
                 setStatus('idle');
                 setData([]);
                 setProgress(0);
+                setLastUpdated(null);
               }}
             />
           </React.Suspense>
