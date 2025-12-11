@@ -63,6 +63,7 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
       lbCountries: [],
       lbGenres: [],
       lbThemes: [],
+      lbPosterUrl: null,
     };
   }
 
@@ -85,6 +86,38 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
     const crew$ = cheerio.load(crewHtml);
     const details$ = cheerio.load(detailsHtml);
     const genres$ = cheerio.load(genresHtml);
+
+    // --- Poster (from main film page) ---
+    let lbPosterUrl = null;
+    try {
+      // Try a few likely selectors to locate the main poster image
+      let posterImg =
+        main$('.film-poster img').first();
+
+      if (!posterImg || !posterImg.length) {
+        posterImg = main$('.poster img').first();
+      }
+
+      if (!posterImg || !posterImg.length) {
+        posterImg = main$('img[class*="film-poster"]').first();
+      }
+
+      if (posterImg && posterImg.length) {
+        const rawSrc =
+          posterImg.attr('data-src') ||
+          posterImg.attr('src') ||
+          '';
+        if (rawSrc) {
+          lbPosterUrl = rawSrc.startsWith('http')
+            ? rawSrc
+            : rawSrc.startsWith('//')
+              ? `https:${rawSrc}`
+              : `${rawSrc}`;
+        }
+      }
+    } catch (posterErr) {
+      console.warn('Failed to parse Letterboxd poster for', letterboxdUri, posterErr);
+    }
 
     // --- Cast (from main film page, including overflow) ---
     const lbCast = [];
@@ -166,7 +199,7 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
       }
     });
 
-    return { lbCast, lbCrew, lbStudios, lbCountries, lbGenres, lbThemes };
+    return { lbCast, lbCrew, lbStudios, lbCountries, lbGenres, lbThemes, lbPosterUrl };
   } catch (err) {
     console.error('Failed to scrape Letterboxd film metadata for', letterboxdUri, err);
     return {
@@ -176,6 +209,7 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
       lbCountries: [],
       lbGenres: [],
       lbThemes: [],
+      lbPosterUrl: null,
     };
   }
 }

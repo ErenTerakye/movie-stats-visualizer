@@ -312,18 +312,20 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
 
     // Top Decades
     const topDecades = Object.entries(decadesDetailedMap)
-        .map(([name, stat]) => {
-            const ratedMovies = stat.movies.filter(m => m.Rating);
-            const ratedMoviesWithPoster = ratedMovies.filter(m => m.poster_path);
-            return {
-                name,
-                average: stat.count > 0 ? stat.sumRating / stat.count : 0,
-                count: stat.count,
-                topMovies: ratedMoviesWithPoster
-                    .sort((a, b) => parseFloat(b.Rating) - parseFloat(a.Rating))
-                    .slice(0, 12)
-            };
-        })
+      .map(([name, stat]) => {
+        const ratedMovies = stat.movies.filter(m => m.Rating);
+        const ratedMoviesWithPoster = ratedMovies.filter(
+          (m) => m.poster_path || m.lbPosterUrl
+        );
+        return {
+          name,
+          average: stat.count > 0 ? stat.sumRating / stat.count : 0,
+          count: stat.count,
+          topMovies: ratedMoviesWithPoster
+            .sort((a, b) => parseFloat(b.Rating) - parseFloat(a.Rating))
+            .slice(0, 12)
+        };
+      })
         .filter(d => d.count >= 3)
         .sort((a, b) => b.average - a.average)
         .slice(0, 3);
@@ -557,9 +559,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 lg:gap-3">
                   {decade.topMovies.map((movie: any, idx: number) => (
                     <div key={`${movie.tmdb_id}-${idx}`} className="relative group w-full aspect-[2/3] bg-gray-800 rounded overflow-hidden shadow-lg hover:ring-2 hover:ring-lb-green transition-all cursor-default transform hover:-translate-y-1 hover:z-10 duration-200">
-                      {movie.poster_path ? (
+                      {movie.lbPosterUrl || movie.poster_path ? (
                         <img 
-                          src={`https://image.tmdb.org/t/p/w154${movie.poster_path}`} 
+                          src={movie.lbPosterUrl
+                            ? movie.lbPosterUrl
+                            : `https://image.tmdb.org/t/p/w154${movie.poster_path}`}
                           alt={movie.Name}
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />

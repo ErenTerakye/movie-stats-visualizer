@@ -53,6 +53,7 @@ export interface EnrichedMovie extends LetterboxdEntry {
   lbCountries?: string[];
   lbGenres?: string[];
   lbThemes?: string[];
+  lbPosterUrl?: string | null;
   notFound?: boolean;
   error?: boolean;
 }
