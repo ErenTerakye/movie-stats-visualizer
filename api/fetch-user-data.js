@@ -39,7 +39,7 @@ function getRedisClient() {
 
 // Simple versioned cache key helpers so we can invalidate cached
 // payloads by bumping CACHE_VERSION.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 
 // How long to cache the fully-enriched per-user payload.
 const USER_CACHE_TTL_SECONDS = 60 * 60 * 6; // 6 hours
@@ -548,7 +548,7 @@ async function searchTMDB(movie) {
   return { match: null, mediaType: null };
 }
 
-async function enrichWithTMDB(entries) {
+async function enrichWithTMDB(entries, forceRefresh = false) {
   if (!TMDB_API_KEY) {
     throw new Error('TMDB_API_KEY is not configured on the server.');
   }
@@ -564,8 +564,9 @@ async function enrichWithTMDB(entries) {
     const enrichedChunk = await Promise.all(chunk.map(async (movie) => {
       const cacheKey = redisClient ? buildFilmTmdbCacheKey(movie) : null;
 
-      // Try per-film TMDB cache first.
-      if (redisClient && cacheKey) {
+      // Try per-film TMDB cache first, unless this is an explicit
+      // force-refresh request.
+      if (!forceRefresh && redisClient && cacheKey) {
         try {
           const cached = await redisClient.get(cacheKey);
           if (cached && typeof cached === 'object') {
@@ -665,7 +666,7 @@ async function enrichWithTMDB(entries) {
 
 // Enrich list of films with Letterboxd-native metadata (cast, crew,
 // studios, countries, genres, themes) scraped from each film's page.
-async function enrichWithLetterboxdDetails(entries) {
+async function enrichWithLetterboxdDetails(entries, forceRefresh = false) {
   const result = [];
   const CHUNK_SIZE = 3;
   const redisClient = getRedisClient();
@@ -680,8 +681,9 @@ async function enrichWithLetterboxdDetails(entries) {
         ? buildFilmLetterboxdCacheKey(movie.LetterboxdURI)
         : null;
 
-      // Try per-film Letterboxd metadata cache first.
-      if (redisClient && cacheKey) {
+      // Try per-film Letterboxd metadata cache first, unless this is
+      // an explicit force-refresh request.
+      if (!forceRefresh && redisClient && cacheKey) {
         try {
           const cached = await redisClient.get(cacheKey);
           if (cached && typeof cached === 'object') {
@@ -824,8 +826,8 @@ export default async function handler(req, res) {
 
     // First enrich with Letterboxd-native film metadata, then fall
     // back to TMDB for additional info like runtime and posters.
-    const withLetterboxdDetails = await enrichWithLetterboxdDetails(mergedEntries);
-    const enriched = await enrichWithTMDB(withLetterboxdDetails);
+    const withLetterboxdDetails = await enrichWithLetterboxdDetails(mergedEntries, forceRefresh);
+    const enriched = await enrichWithTMDB(withLetterboxdDetails, forceRefresh);
 
     const payload = {
       username,
