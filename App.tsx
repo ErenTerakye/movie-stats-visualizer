@@ -88,7 +88,7 @@ const App: React.FC = () => {
   const [gclMetric, setGclMetric] = useState<'watched' | 'rated'>('watched');
     const [crewMetric, setCrewMetric] = useState<'watched' | 'rated'>('watched');
 
-    // Smooth, approximate progress bar while fetching from the backend
+    // Smooth, slower approximate progress bar while fetching from the backend
     useEffect(() => {
         if (status !== 'fetching') {
             if (status === 'ready') {
@@ -102,12 +102,19 @@ const App: React.FC = () => {
 
         const intervalId = window.setInterval(() => {
             setProgress((prev) => {
-                if (prev >= 90) return prev; // cap until final completion
-                // Slightly slower as it approaches the cap
-                const increment = prev < 50 ? 5 : prev < 75 ? 3 : 1;
-                return Math.min(prev + increment, 90);
+                // Cap the simulated progress well below 100 so
+                // long-running fetches don't sit forever at "99%"
+                if (prev >= 85) return prev;
+
+                // Much slower progression: quick start, then gradually slows
+                const increment =
+                    prev < 40 ? 2 :
+                    prev < 70 ? 1 :
+                    0.5;
+
+                return Math.min(prev + increment, 85);
             });
-        }, 400);
+        }, 800);
 
         return () => {
             window.clearInterval(intervalId);
@@ -562,7 +569,7 @@ const App: React.FC = () => {
                     style={{ width: `${progress}%` }}
                 ></div>
             </div>
-            <p className="mt-2 text-right text-sm text-lb-green font-mono">{progress}%</p>
+                        <p className="mt-2 text-right text-sm text-lb-green font-mono">{Math.round(progress)}%</p>
           </div>
         )}
 
