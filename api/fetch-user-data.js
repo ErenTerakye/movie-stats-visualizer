@@ -107,10 +107,10 @@ function normalizeFilmUrl(letterboxdUri) {
   return url;
 }
 
-// Placeholder: scrape detailed Letterboxd metadata for a single film.
-// This function will be wired to use the real CSS selectors
-// once the HTML structure for cast, crew, details, and genres pages
-// is finalized.
+// Scrape detailed Letterboxd metadata for a single film.
+// Note: we currently only use this for semantic data (cast/crew/genres,
+// studios/countries, themes, and external IDs). Poster artwork now comes
+// exclusively from TMDB so that image selection is consistent.
 async function scrapeLetterboxdFilmMeta(letterboxdUri) {
   const baseUrl = normalizeFilmUrl(letterboxdUri);
   if (!baseUrl) {
