@@ -148,63 +148,73 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
     // --- Poster (from main film page) ---
     let lbPosterUrl = null;
     try {
-      // Try a few likely selectors to locate the main poster image
-      let posterImg = main$('div.poster.film-poster img').first();
+      const EMPTY_POSTER_FRAGMENT = 'empty-poster';
 
-      if (!posterImg || !posterImg.length) {
-        posterImg = main$('.film-poster img').first();
+      const normalizeUrl = (u) => {
+        if (!u) return null;
+        const trimmed = String(u).trim();
+        if (!trimmed || trimmed.includes(EMPTY_POSTER_FRAGMENT)) return null;
+        if (trimmed.startsWith('http')) return trimmed;
+        if (trimmed.startsWith('//')) return `https:${trimmed}`;
+        return trimmed;
+      };
+
+      // 1) Prefer the Open Graph image in <head>, which usually
+      // matches the main poster and is very stable.
+      const ogImage = normalizeUrl(main$('meta[property="og:image"]').attr('content'));
+      if (ogImage) {
+        lbPosterUrl = ogImage;
       }
 
-      if (!posterImg || !posterImg.length) {
-        posterImg = main$('.poster img').first();
-      }
+      // 2) Fallback to poster <img> elements in the page if needed.
+      if (!lbPosterUrl) {
+        // Try a few likely selectors to locate the main poster image
+        let posterImg = main$('div.poster.film-poster img').first();
 
-      if (!posterImg || !posterImg.length) {
-        posterImg = main$('img[class*="film-poster"]').first();
-      }
-
-      if (posterImg && posterImg.length) {
-        const EMPTY_POSTER_FRAGMENT = 'empty-poster';
-
-        const normalizeUrl = (u) => {
-          if (!u) return null;
-          const trimmed = u.trim();
-          if (!trimmed || trimmed.includes(EMPTY_POSTER_FRAGMENT)) return null;
-          if (trimmed.startsWith('http')) return trimmed;
-          if (trimmed.startsWith('//')) return `https:${trimmed}`;
-          return trimmed;
-        };
-
-        // Some Letterboxd HTML uses srcset/data-srcset with the real poster
-        // and puts an "empty-poster" placeholder in src. Prefer srcset first.
-        const rawSrcset =
-          posterImg.attr('data-srcset') ||
-          posterImg.attr('srcset') ||
-          '';
-
-        if (rawSrcset) {
-          const candidates = rawSrcset
-            .split(',')
-            .map((part) => part.trim().split(' ')[0])
-            .filter(Boolean);
-
-          for (const candidate of candidates) {
-            const url = normalizeUrl(candidate);
-            if (url) {
-              lbPosterUrl = url;
-              break;
-            }
-          }
+        if (!posterImg || !posterImg.length) {
+          posterImg = main$('.film-poster img').first();
         }
 
-        if (!lbPosterUrl) {
-          const rawSrc =
-            posterImg.attr('data-src') ||
-            posterImg.attr('src') ||
+        if (!posterImg || !posterImg.length) {
+          posterImg = main$('.poster img').first();
+        }
+
+        if (!posterImg || !posterImg.length) {
+          posterImg = main$('img[class*="film-poster"]').first();
+        }
+
+        if (posterImg && posterImg.length) {
+          // Some Letterboxd HTML uses srcset/data-srcset with the real poster
+          // and puts an "empty-poster" placeholder in src. Prefer srcset first.
+          const rawSrcset =
+            posterImg.attr('data-srcset') ||
+            posterImg.attr('srcset') ||
             '';
-          const url = normalizeUrl(rawSrc);
-          if (url) {
-            lbPosterUrl = url;
+
+          if (rawSrcset) {
+            const candidates = rawSrcset
+              .split(',')
+              .map((part) => part.trim().split(' ')[0])
+              .filter(Boolean);
+
+            for (const candidate of candidates) {
+              const url = normalizeUrl(candidate);
+              if (url) {
+                lbPosterUrl = url;
+                break;
+              }
+            }
+          }
+
+          if (!lbPosterUrl) {
+            const rawSrc =
+              posterImg.attr('data-src') ||
+              posterImg.attr('src') ||
+              '';
+            const url = normalizeUrl(rawSrc);
+            if (url) {
+              lbPosterUrl = url;
+            }
           }
         }
       }
