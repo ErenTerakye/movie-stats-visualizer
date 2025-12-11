@@ -46,8 +46,25 @@ export interface EnrichedMovie extends LetterboxdEntry {
   runtime?: number;
   directors?: Director[];
   cast?: CastMember[];
+  // Letterboxd-native metadata (scraped from film pages)
+  lbCast?: LetterboxdCastMember[];
+  lbCrew?: LetterboxdCrewMember[];
+  lbStudios?: string[];
+  lbCountries?: string[];
+  lbGenres?: string[];
+  lbThemes?: string[];
   notFound?: boolean;
   error?: boolean;
+}
+
+export interface LetterboxdCastMember {
+  name: string;
+  character?: string;
+}
+
+export interface LetterboxdCrewMember {
+  name: string;
+  job?: string;
 }
 
 export type AppStatus = 'idle' | 'parsing' | 'fetching' | 'ready';

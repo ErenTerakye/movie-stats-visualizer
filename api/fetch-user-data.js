@@ -36,6 +36,150 @@ async function fetchHtml(url) {
   return await res.text();
 }
 
+function normalizeFilmUrl(letterboxdUri) {
+  if (!letterboxdUri) return '';
+  // Accept full URLs or "/film/..." paths and normalize trailing slash
+  let url = letterboxdUri;
+  if (!url.startsWith('http')) {
+    url = `${LETTERBOXD_BASE}${url}`;
+  }
+  if (!url.endsWith('/')) {
+    url += '/';
+  }
+  return url;
+}
+
+// Placeholder: scrape detailed Letterboxd metadata for a single film.
+// This function will be wired to use the real CSS selectors
+// once the HTML structure for cast, crew, details, and genres pages
+// is finalized.
+async function scrapeLetterboxdFilmMeta(letterboxdUri) {
+  const baseUrl = normalizeFilmUrl(letterboxdUri);
+  if (!baseUrl) {
+    return {
+      lbCast: [],
+      lbCrew: [],
+      lbStudios: [],
+      lbCountries: [],
+      lbGenres: [],
+      lbThemes: [],
+    };
+  }
+
+  const urls = {
+    main: baseUrl,
+    crew: `${baseUrl}crew/`,
+    details: `${baseUrl}details/`,
+    genres: `${baseUrl}genres/`,
+  };
+
+  try {
+    const [mainHtml, crewHtml, detailsHtml, genresHtml] = await Promise.all([
+      fetchHtml(urls.main),
+      fetchHtml(urls.crew),
+      fetchHtml(urls.details),
+      fetchHtml(urls.genres),
+    ]);
+
+    const main$ = cheerio.load(mainHtml);
+    const crew$ = cheerio.load(crewHtml);
+    const details$ = cheerio.load(detailsHtml);
+    const genres$ = cheerio.load(genresHtml);
+
+    // --- Cast (from main film page, including overflow) ---
+    const lbCast = [];
+    main$('#tab-cast .cast-list a.text-slug').each((_, el) => {
+      const anchor = main$(el);
+      const href = anchor.attr('href') || '';
+      // Skip the "Show All…" toggle which has no href
+      if (!href) return;
+      const name = anchor.text().trim();
+      if (!name) return;
+      const characterAttr = anchor.attr('data-original-title');
+      const character = characterAttr ? characterAttr.trim() : '';
+      lbCast.push({ name, character: character || undefined });
+    });
+
+    // --- Crew (from /crew/ page) ---
+    const lbCrew = [];
+    crew$('#tab-crew h3').each((_, h3) => {
+      const heading = crew$(h3);
+      const jobText =
+        heading.find('.crewrole.-full').text().trim() ||
+        heading.text().trim();
+      if (!jobText) return;
+      const list = heading.next('.text-sluglist');
+      if (!list || !list.length) return;
+      list.find('a.text-slug').each((__, link) => {
+        const name = crew$(link).text().trim();
+        if (!name) return;
+        lbCrew.push({ name, job: jobText });
+      });
+    });
+
+    // --- Studios & Countries (from /details/ page) ---
+    const lbStudios = [];
+    const lbCountries = [];
+    details$('#tab-details h3').each((_, h3) => {
+      const heading = details$(h3);
+      const label = heading.text().trim();
+      const list = heading.next('.text-sluglist');
+      if (!list || !list.length) return;
+
+      if (/studios?/i.test(label)) {
+        list.find('a.text-slug').each((__, link) => {
+          const name = details$(link).text().trim();
+          if (name) lbStudios.push(name);
+        });
+      } else if (/countries?/i.test(label)) {
+        list.find('a.text-slug').each((__, link) => {
+          const name = details$(link).text().trim();
+          if (name) lbCountries.push(name);
+        });
+      }
+    });
+
+    // --- Genres & Themes (from /genres/ page) ---
+    const lbGenres = [];
+    const lbThemes = [];
+    genres$('#tab-genres h3').each((_, h3) => {
+      const heading = genres$(h3);
+      const label = heading.text().trim();
+      const list = heading.next('.text-sluglist');
+      if (!list || !list.length) return;
+
+      if (/genres?/i.test(label)) {
+        list.find('a.text-slug').each((__, link) => {
+          const text = genres$(link).text().trim();
+          const href = genres$(link).attr('href') || '';
+          if (!href || !text) return;
+          lbGenres.push(text);
+        });
+      } else if (/themes?/i.test(label)) {
+        list.find('a.text-slug').each((__, link) => {
+          const text = genres$(link).text().trim();
+          const href = genres$(link).attr('href') || '';
+          // Skip the "Show All…" link which points back to /film/.../themes/
+          if (!href || /^show all/i.test(text)) return;
+          lbThemes.push(text);
+        });
+      }
+    });
+
+    return { lbCast, lbCrew, lbStudios, lbCountries, lbGenres, lbThemes };
+  } catch (err) {
+    console.error('Failed to scrape Letterboxd film metadata for', letterboxdUri, err);
+    return {
+      lbCast: [],
+      lbCrew: [],
+      lbStudios: [],
+      lbCountries: [],
+      lbGenres: [],
+      lbThemes: [],
+    };
+  }
+}
+
 // Scrape a single diary page and return entries + whether a next page exists
 async function scrapeDiaryPage(username, page = 1) {
   const path = page === 1
@@ -337,6 +481,34 @@ async function enrichWithTMDB(entries) {
   return result;
 }
 
+// Enrich list of films with Letterboxd-native metadata (cast, crew,
+// studios, countries, genres, themes) scraped from each film's page.
+async function enrichWithLetterboxdDetails(entries) {
+  const result = [];
+  const CHUNK_SIZE = 3;
+
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const chunk = entries.slice(i, i + CHUNK_SIZE);
+
+    const enrichedChunk = await Promise.all(chunk.map(async (movie) => {
+      if (!movie.LetterboxdURI) return movie;
+      try {
+        const meta = await scrapeLetterboxdFilmMeta(movie.LetterboxdURI);
+        return { ...movie, ...meta };
+      } catch (err) {
+        console.error('Letterboxd details enrichment failed for', movie.Name, err);
+        return movie;
+      }
+    }));
+
+    result.push(...enrichedChunk);
+    // Small delay between chunks to be gentle with Letterboxd.
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  return result;
+}
+
 export default async function handler(req, res) {
   // Basic CORS support so the frontend on GitHub Pages (or other origins)
   // can call this Vercel function.
@@ -421,7 +593,10 @@ export default async function handler(req, res) {
 
     const mergedEntries = Array.from(byUri.values());
 
-    const enriched = await enrichWithTMDB(mergedEntries);
+    // First enrich with Letterboxd-native film metadata, then fall
+    // back to TMDB for additional info like runtime and posters.
+    const withLetterboxdDetails = await enrichWithLetterboxdDetails(mergedEntries);
+    const enriched = await enrichWithTMDB(withLetterboxdDetails);
 
     res.status(200).json({
       username,

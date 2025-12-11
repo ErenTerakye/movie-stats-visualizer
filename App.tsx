@@ -234,19 +234,22 @@ const App: React.FC = () => {
         sumRating += parseFloat(movie.Rating);
       }
 
-      // Genres
-      if (movie.genres) {
-        movie.genres.forEach(g => aggGCL(g.name, genresStats, movie.Rating));
-      }
+            // Genres (prefer Letterboxd-native genres if present)
+            const effectiveGenres: string[] = movie.lbGenres && movie.lbGenres.length
+                ? movie.lbGenres
+                : (movie.genres || []).map((g: any) => g.name);
+            effectiveGenres.forEach(name => aggGCL(name, genresStats, movie.Rating));
 
-      // Countries
-      if (movie.production_countries) {
-        movie.production_countries.forEach(c => {
-           const name = c.iso_3166_1 === 'US' ? 'USA' : 
-                        c.iso_3166_1 === 'GB' ? 'UK' : c.name;
-           aggGCL(name, countriesStats, movie.Rating);
-        });
-      }
+            // Countries (prefer Letterboxd-native countries if present)
+            const effectiveCountries: string[] = movie.lbCountries && movie.lbCountries.length
+                ? movie.lbCountries
+                : (movie.production_countries || []).map((c: any) => {
+                        if (!c || !c.name) return '';
+                        if (c.iso_3166_1 === 'US') return 'USA';
+                        if (c.iso_3166_1 === 'GB') return 'UK';
+                        return c.name;
+                    }).filter(Boolean);
+            effectiveCountries.forEach(name => aggGCL(name, countriesStats, movie.Rating));
 
       // Languages
       if (movie.original_language) {
@@ -254,11 +257,26 @@ const App: React.FC = () => {
           aggGCL(langName, languagesStats, movie.Rating);
       }
       
-      // Directors & Actors (count only rated films to avoid noisy, unrated entries)
-      if (movie.Rating) {
-          movie.directors?.forEach(d => { directorsMap[d.name] = (directorsMap[d.name] || 0) + 1; });
-          movie.cast?.forEach(a => { actorsMap[a.name] = (actorsMap[a.name] || 0) + 1; });
-      }
+            // Directors & Actors (prefer Letterboxd-native credits; count only rated films)
+            if (movie.Rating) {
+                    const directorNames: string[] = movie.lbCrew && movie.lbCrew.length
+                        ? movie.lbCrew
+                                .filter((p: any) => typeof p.job === 'string' && /director/i.test(p.job))
+                                .map((p: any) => p.name)
+                        : (movie.directors || []).map(d => d.name);
+
+                    const actorNames: string[] = movie.lbCast && movie.lbCast.length
+                        ? movie.lbCast.map((a: any) => a.name)
+                        : (movie.cast || []).map(a => a.name);
+
+                    directorNames.forEach(name => {
+                        directorsMap[name] = (directorsMap[name] || 0) + 1;
+                    });
+
+                    actorNames.forEach(name => {
+                        actorsMap[name] = (actorsMap[name] || 0) + 1;
+                    });
+            }
 
       // Runtime
       if (movie.runtime) {
