@@ -16,6 +16,38 @@ const getLanguageName = (code: string) => {
     }
 };
 
+// Crew roles we care about and their display names/order
+const CREW_ROLE_CONFIG = [
+  { label: 'Co-Directors', matcher: (job: string) => /co-?director/i.test(job) },
+  { label: 'Producers', matcher: (job: string) => /producer/i.test(job) },
+  { label: 'Writers', matcher: (job: string) => /writer/i.test(job) && !/original/i.test(job) },
+  { label: 'Original Writers', matcher: (job: string) => /original\s+writer/i.test(job) },
+  { label: 'Story', matcher: (job: string) => /story/i.test(job) },
+  { label: 'Casting', matcher: (job: string) => /casting/i.test(job) },
+  { label: 'Editors', matcher: (job: string) => /editor/i.test(job) },
+  { label: 'Cinematography', matcher: (job: string) => /cinematograph|director of photography/i.test(job) },
+] as const;
+
+const orderCrewSectionsForUI = (sections: any[]) => {
+  const result: any[] = [];
+  const usedJobs = new Set<string>();
+
+  CREW_ROLE_CONFIG.forEach((config) => {
+    const match = sections.find((section: any) => {
+      if (!section || typeof section.job !== 'string') return false;
+      if (usedJobs.has(section.job)) return false;
+      return config.matcher(section.job);
+    });
+
+    if (match) {
+      usedJobs.add(match.job);
+      result.push({ ...match, displayJob: config.label });
+    }
+  });
+
+  return result;
+};
+
 // --- Custom Tooltip Component ---
 const CustomTooltip = ({ active, payload, label, valueType, isRatingLabel, starIconColor }: any) => {
   if (active && payload && payload.length) {
@@ -422,6 +454,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
     );
   }
 
+  const crewSectionsMostWatchedOrdered = orderCrewSectionsForUI(stats.crewSectionsMostWatched);
+  const crewSectionsHighestRatedOrdered = orderCrewSectionsForUI(stats.crewSectionsHighestRated);
+
   return (
     <div className="animate-[fadeIn_0.5s_ease-out] pb-20 space-y-6 md:space-y-8">
       {/* Action Bar */}
@@ -685,57 +720,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
         </div>
       </div>
 
-      {/* 6. Crew & Studios */}
-      {stats.crewSectionsMostWatched && stats.crewSectionsMostWatched.length > 0 && (
-        <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-3 md:gap-4">
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-bold text-white tracking-widest uppercase">Crew &amp; Studios</span>
-            </div>
-            <div className="hidden md:block h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
-            <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase w-full md:w-auto justify-between md:justify-end">
-              <button
-                onClick={() => setCrewMetric('watched')}
-                className={`${crewMetric === 'watched' ? 'text-lb-blue' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
-              >
-                Most Watched
-              </button>
-              <button
-                onClick={() => setCrewMetric('rated')}
-                className={`${crewMetric === 'rated' ? 'text-lb-orange' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
-              >
-                Highest Rated
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {(crewMetric === 'watched' ? stats.crewSectionsMostWatched : stats.crewSectionsHighestRated)
-              .slice(0, 8)
-              .map((section: any) => (
-                <div key={section.job} className="space-y-2 min-w-0">
-                  <h4 className="text-[11px] font-semibold text-gray-400 tracking-[0.18em] uppercase truncate">
-                    {section.job}
-                  </h4>
-                  <ul className="space-y-1 text-sm">
-                    {section.people.map((person: any) => (
-                      <li key={person.name} className="flex items-baseline justify-between gap-2">
-                        <span className="text-lb-text truncate">{person.name}</span>
-                        <span className="text-[11px] text-gray-500 font-mono">
-                          {crewMetric === 'watched'
-                            ? person.count
-                            : person.average.toFixed(2)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* 7. Directors & Stars */}
+      {/* 6. Directors & Stars */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
           <SectionHeader icon={Users} title="Top Directors" color="text-lb-blue" />
@@ -795,6 +780,55 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
           </div>
         </div>
       </div>
+
+      {/* 7. Crews & Studios */}
+      {crewSectionsMostWatchedOrdered.length > 0 && (
+        <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-3 md:gap-4">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-bold text-white tracking-widest uppercase">Crews &amp; Studios</span>
+            </div>
+            <div className="hidden md:block h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
+            <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase w-full md:w-auto justify-between md:justify-end">
+              <button
+                onClick={() => setCrewMetric('watched')}
+                className={`${crewMetric === 'watched' ? 'text-lb-blue' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+              >
+                Most Watched
+              </button>
+              <button
+                onClick={() => setCrewMetric('rated')}
+                className={`${crewMetric === 'rated' ? 'text-lb-orange' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+              >
+                Highest Rated
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {(crewMetric === 'watched' ? crewSectionsMostWatchedOrdered : crewSectionsHighestRatedOrdered)
+              .map((section: any) => (
+                <div key={section.displayJob} className="space-y-2 min-w-0">
+                  <h4 className="text-[11px] font-semibold text-gray-400 tracking-[0.18em] uppercase truncate">
+                    {section.displayJob}
+                  </h4>
+                  <ul className="space-y-1 text-sm">
+                    {section.people.map((person: any) => (
+                      <li key={person.name} className="flex items-baseline justify-between gap-2">
+                        <span className="text-gray-100 truncate">{person.name}</span>
+                        <span className="text-[11px] text-gray-500 font-mono">
+                          {crewMetric === 'watched'
+                            ? person.count
+                            : person.average.toFixed(1)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
