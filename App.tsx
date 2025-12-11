@@ -86,6 +86,7 @@ const App: React.FC = () => {
   // Chart Toggles
   const [yearMetric, setYearMetric] = useState<'films' | 'rating' | 'diary'>('films');
   const [gclMetric, setGclMetric] = useState<'watched' | 'rated'>('watched');
+    const [crewMetric, setCrewMetric] = useState<'watched' | 'rated'>('watched');
 
     // Smooth, approximate progress bar while fetching from the backend
     useEffect(() => {
@@ -185,6 +186,8 @@ const App: React.FC = () => {
     const genresStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
     const countriesStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
     const languagesStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
+    const studiosStats: Record<string, { count: number, sumRating: number, ratedCount: number }> = {};
+    const crewByJobStats: Record<string, Record<string, { count: number, sumRating: number, ratedCount: number }>> = {};
     
     let totalRated = 0;
     let sumRating = 0;
@@ -277,6 +280,15 @@ const App: React.FC = () => {
                     }).filter(Boolean);
             effectiveCountries.forEach(name => aggGCL(name, countriesStats, movie.Rating));
 
+      // Studios (Letterboxd-native only for now)
+      if (movie.lbStudios && movie.lbStudios.length) {
+          movie.lbStudios.forEach((studio: string) => {
+              const name = (studio || '').trim();
+              if (!name) return;
+              aggGCL(name, studiosStats, movie.Rating);
+          });
+      }
+
       // Languages
       if (movie.original_language) {
           const langName = getLanguageName(movie.original_language);
@@ -303,6 +315,26 @@ const App: React.FC = () => {
                         actorsMap[name] = (actorsMap[name] || 0) + 1;
                     });
             }
+
+      // Crew by job (Letterboxd-native)
+      if (movie.lbCrew && movie.lbCrew.length) {
+          movie.lbCrew.forEach((member: any) => {
+              if (!member || !member.name) return;
+              const job = (member.job || 'Other').trim();
+              if (!crewByJobStats[job]) {
+                  crewByJobStats[job] = {};
+              }
+              if (!crewByJobStats[job][member.name]) {
+                  crewByJobStats[job][member.name] = { count: 0, sumRating: 0, ratedCount: 0 };
+              }
+              const stat = crewByJobStats[job][member.name];
+              stat.count += 1;
+              if (movie.Rating) {
+                  stat.sumRating += parseFloat(movie.Rating);
+                  stat.ratedCount += 1;
+              }
+          });
+      }
 
       // Runtime
       if (movie.runtime) {
@@ -357,6 +389,7 @@ const App: React.FC = () => {
     const genresData = processGCL(genresStats);
     const countriesData = processGCL(countriesStats);
     const languagesData = processGCL(languagesStats);
+    const studiosData = processGCL(studiosStats);
 
     const directorsData = Object.entries(directorsMap)
       .map(([name, value]) => ({ name, value }))
@@ -368,6 +401,55 @@ const App: React.FC = () => {
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
+    // Crew & Studios sections (for "Crew & Studios" panel)
+    const crewSectionsMostWatched: any[] = [];
+    const crewSectionsHighestRated: any[] = [];
+
+    Object.entries(crewByJobStats).forEach(([job, peopleMap]) => {
+        const peopleArray = Object.entries(peopleMap as any).map(([name, stat]: any) => ({
+            name,
+            count: stat.count,
+            average: stat.ratedCount > 0 ? stat.sumRating / stat.ratedCount : 0,
+            ratedCount: stat.ratedCount,
+        }));
+
+        const mostWatched = [...peopleArray]
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 6);
+        const highestRated = peopleArray
+            .filter(p => p.ratedCount >= 3)
+            .sort((a, b) => b.average - a.average)
+            .slice(0, 6);
+
+        if (mostWatched.length) {
+            crewSectionsMostWatched.push({ job, people: mostWatched });
+        }
+        if (highestRated.length) {
+            crewSectionsHighestRated.push({ job, people: highestRated });
+        }
+    });
+
+    // Studios as their own "job" section
+    if (studiosData.length) {
+        const studiosMostWatched = [...studiosData]
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 6);
+        const studiosHighestRated = studiosData
+            .filter(s => s.ratedCount >= 3)
+            .sort((a, b) => b.average - a.average)
+            .slice(0, 6);
+
+        if (studiosMostWatched.length) {
+            crewSectionsMostWatched.push({ job: 'Studios', people: studiosMostWatched });
+        }
+        if (studiosHighestRated.length) {
+            crewSectionsHighestRated.push({ job: 'Studios', people: studiosHighestRated });
+        }
+    }
+
+    crewSectionsMostWatched.sort((a, b) => a.job.localeCompare(b.job));
+    crewSectionsHighestRated.sort((a, b) => a.job.localeCompare(b.job));
+
     const averageRating = totalRated > 0 ? (sumRating / totalRated).toFixed(2) : 'N/A';
     const totalHours = Math.round(totalRuntimeMinutes / 60);
 
@@ -375,13 +457,16 @@ const App: React.FC = () => {
         yearsData, 
         topDecades,
         ratingsData, 
-        genresData, 
-        countriesData, 
-        languagesData,
+                genresData, 
+                countriesData, 
+                languagesData,
+                studiosData,
         directorsData, 
         actorsData, 
-        averageRating, 
-        totalHours,
+                averageRating, 
+                totalHours,
+                crewSectionsMostWatched,
+                crewSectionsHighestRated,
     };
   }, [data]);
 
@@ -749,7 +834,57 @@ const App: React.FC = () => {
                 </div>
              </div>
 
-             {/* 6. Directors & Stars */}
+                         {/* 6. Crew & Studios */}
+                         {stats.crewSectionsMostWatched && stats.crewSectionsMostWatched.length > 0 && (
+                             <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+                                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-3 md:gap-4">
+                                     <div className="flex items-center gap-2 shrink-0">
+                                         <span className="text-xs font-bold text-white tracking-widest uppercase">Crew &amp; Studios</span>
+                                     </div>
+                                     <div className="hidden md:block h-[1px] bg-gray-700 w-full mx-4 opacity-50"></div>
+                                     <div className="flex gap-4 shrink-0 text-xs font-bold tracking-widest uppercase w-full md:w-auto justify-between md:justify-end">
+                                         <button
+                                             onClick={() => setCrewMetric('watched')}
+                                             className={`${crewMetric === 'watched' ? 'text-lb-blue' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+                                         >
+                                             Most Watched
+                                         </button>
+                                         <button
+                                             onClick={() => setCrewMetric('rated')}
+                                             className={`${crewMetric === 'rated' ? 'text-lb-orange' : 'text-gray-500 hover:text-gray-300'} transition-colors`}
+                                         >
+                                             Highest Rated
+                                         </button>
+                                     </div>
+                                 </div>
+
+                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                     {(crewMetric === 'watched' ? stats.crewSectionsMostWatched : stats.crewSectionsHighestRated)
+                                         .slice(0, 8)
+                                         .map((section: any) => (
+                                             <div key={section.job} className="space-y-2 min-w-0">
+                                                 <h4 className="text-[11px] font-semibold text-gray-400 tracking-[0.18em] uppercase truncate">
+                                                     {section.job}
+                                                 </h4>
+                                                 <ul className="space-y-1 text-sm">
+                                                     {section.people.map((person: any) => (
+                                                         <li key={person.name} className="flex items-baseline justify-between gap-2">
+                                                             <span className="text-lb-text truncate">{person.name}</span>
+                                                             <span className="text-[11px] text-gray-500 font-mono">
+                                                                 {crewMetric === 'watched'
+                                                                     ? person.count
+                                                                     : person.average.toFixed(2)}
+                                                             </span>
+                                                         </li>
+                                                     ))}
+                                                 </ul>
+                                             </div>
+                                         ))}
+                                 </div>
+                             </div>
+                         )}
+
+                         {/* 7. Directors & Stars */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <div className="bg-lb-surface p-4 md:p-6 rounded-xl shadow-lg border border-gray-800">
                     <SectionHeader icon={Users} title="Top Directors" color="text-lb-blue" />
