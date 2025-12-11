@@ -39,7 +39,7 @@ function getRedisClient() {
 
 // Simple versioned cache key helpers so we can invalidate cached
 // payloads by bumping CACHE_VERSION.
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 
 // How long to cache the fully-enriched per-user payload.
 const USER_CACHE_TTL_SECONDS = 60 * 60 * 6; // 6 hours
@@ -159,63 +159,64 @@ async function scrapeLetterboxdFilmMeta(letterboxdUri) {
         return trimmed;
       };
 
-      // 1) Prefer the Open Graph image in <head>, which usually
-      // matches the main poster and is very stable.
-      const ogImage = normalizeUrl(main$('meta[property="og:image"]').attr('content'));
-      if (ogImage) {
-        lbPosterUrl = ogImage;
+      // 1) Prefer the dedicated poster image (bottom-left card),
+      // which lives inside the LazyPoster/film-poster markup.
+      let posterImg = main$('div.poster.film-poster img').first();
+
+      if (!posterImg || !posterImg.length) {
+        posterImg = main$('.film-poster img').first();
       }
 
-      // 2) Fallback to poster <img> elements in the page if needed.
-      if (!lbPosterUrl) {
-        // Try a few likely selectors to locate the main poster image
-        let posterImg = main$('div.poster.film-poster img').first();
+      if (!posterImg || !posterImg.length) {
+        posterImg = main$('.poster img').first();
+      }
 
-        if (!posterImg || !posterImg.length) {
-          posterImg = main$('.film-poster img').first();
-        }
+      if (!posterImg || !posterImg.length) {
+        posterImg = main$('img[class*="film-poster"]').first();
+      }
 
-        if (!posterImg || !posterImg.length) {
-          posterImg = main$('.poster img').first();
-        }
+      if (posterImg && posterImg.length) {
+        // Some Letterboxd HTML uses srcset/data-srcset with the real poster
+        // and puts an "empty-poster" placeholder in src. Prefer srcset first.
+        const rawSrcset =
+          posterImg.attr('data-srcset') ||
+          posterImg.attr('srcset') ||
+          '';
 
-        if (!posterImg || !posterImg.length) {
-          posterImg = main$('img[class*="film-poster"]').first();
-        }
+        if (rawSrcset) {
+          const candidates = rawSrcset
+            .split(',')
+            .map((part) => part.trim().split(' ')[0])
+            .filter(Boolean);
 
-        if (posterImg && posterImg.length) {
-          // Some Letterboxd HTML uses srcset/data-srcset with the real poster
-          // and puts an "empty-poster" placeholder in src. Prefer srcset first.
-          const rawSrcset =
-            posterImg.attr('data-srcset') ||
-            posterImg.attr('srcset') ||
-            '';
-
-          if (rawSrcset) {
-            const candidates = rawSrcset
-              .split(',')
-              .map((part) => part.trim().split(' ')[0])
-              .filter(Boolean);
-
-            for (const candidate of candidates) {
-              const url = normalizeUrl(candidate);
-              if (url) {
-                lbPosterUrl = url;
-                break;
-              }
-            }
-          }
-
-          if (!lbPosterUrl) {
-            const rawSrc =
-              posterImg.attr('data-src') ||
-              posterImg.attr('src') ||
-              '';
-            const url = normalizeUrl(rawSrc);
+          for (const candidate of candidates) {
+            const url = normalizeUrl(candidate);
             if (url) {
               lbPosterUrl = url;
+              break;
             }
           }
+        }
+
+        if (!lbPosterUrl) {
+          const rawSrc =
+            posterImg.attr('data-src') ||
+            posterImg.attr('src') ||
+            '';
+          const url = normalizeUrl(rawSrc);
+          if (url) {
+            lbPosterUrl = url;
+          }
+        }
+      }
+
+      // 2) As a fallback only, use the Open Graph image
+      // (hero/background). This is better than nothing, but we
+      // prefer the true poster when available.
+      if (!lbPosterUrl) {
+        const ogImage = normalizeUrl(main$('meta[property="og:image"]').attr('content'));
+        if (ogImage) {
+          lbPosterUrl = ogImage;
         }
       }
     } catch (posterErr) {
