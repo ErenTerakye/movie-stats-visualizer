@@ -73,6 +73,20 @@ The frontend logic for visualization lives primarily in `App.tsx` and uses **Rec
 
 	- `TMDB_API_KEY` – used by `api/fetch-user-data.js` / `letterboxd-backend/fetch-user-data.js`.
 
+
+	Optional: Upstash Redis (caching)
+
+	This project can optionally cache enriched responses in an Upstash Redis (recommended to reduce scraping and TMDB load). If you enable a DB, set these environment variables in your deployment (Vercel, Netlify, etc.):
+
+	- `UPSTASH_REDIS_REST_URL` – the Upstash REST URL for the database (https://<prefix>.upstash.io)
+	- `UPSTASH_REDIS_REST_TOKEN` – the Upstash REST **token** (use the write token if you want caching writes to succeed)
+
+	Alternative/integration names the code accepts (set any of these if you use the Vercel Upstash integration):
+
+	- `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN`
+
+	Compatibility note: if you added temporary names like `NEW_STORAGE_KV_REST_API_URL` / `NEW_STORAGE_KV_REST_API_TOKEN`, the backend also recognizes those as fallbacks.
+
 	When running the frontend locally, you can point it at a deployed backend (e.g. a Vercel function) using:
 
 	- `VITE_API_BASE_URL` – optional; base URL of the backend (e.g. `https://your-app.vercel.app`). If omitted, the app will call `/api/fetch-user-data` on the same origin.
@@ -113,6 +127,14 @@ There are many ways to deploy this project; one simple pattern is:
   - Deploy `api/fetch-user-data.js` or `letterboxd-backend/fetch-user-data.js` as a serverless function (e.g. Vercel, Netlify Functions, or a small Node/Express app).
   - Set the `TMDB_API_KEY` environment variable in your backend deployment.
   - Configure `VITE_API_BASE_URL` in the frontend environment so the app knows where to reach the backend.
+
+- When deploying to Vercel and using Upstash, you may instead configure the Upstash integration which creates `KV_*` env vars automatically. If you prefer manual control, add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to your Project → Settings → Environment Variables and redeploy.
+
+### Troubleshooting
+
+- `WRONGPASS invalid or missing auth token` from Upstash: your `UPSTASH_REDIS_REST_TOKEN` is incorrect. Copy the REST Token from the Upstash Console (REST API section) and paste it into Vercel without quotes or extra whitespace, then redeploy.
+- `getaddrinfo ENOTFOUND <something>.upstash.io`: indicates the configured Upstash hostname no longer resolves (archived or deleted DB). Ensure `UPSTASH_REDIS_REST_URL` points to your active DB.
+- `403 Forbidden` from Letterboxd: scraping can be blocked by IP or anti-bot rules. The backend adds realistic headers and retries, but you may need to run the function from a different IP, use a proxy service, or implement a headless-browser fallback (Puppeteer) if blocking persists.
 
 ---
 
