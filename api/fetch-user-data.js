@@ -20,14 +20,20 @@ function getRedisClient() {
   // (UPSTASH_REDIS_REST_URL/TOKEN) and the Vercel KV-style
   // env vars (KV_REST_API_URL/TOKEN) that your integration
   // created.
+  // Also accept `NEW_STORAGE_*` names in case you added those manually
   const url =
     process.env.UPSTASH_REDIS_REST_URL ||
     process.env.KV_REST_API_URL ||
-    process.env.KV_URL;
+    process.env.KV_URL ||
+    process.env.NEW_STORAGE_KV_REST_API_URL ||
+    process.env.NEW_STORAGE_KV_URL ||
+    process.env.NEW_STORAGE_REDIS_URL;
 
   const token =
     process.env.UPSTASH_REDIS_REST_TOKEN ||
-    process.env.KV_REST_API_TOKEN;
+    process.env.KV_REST_API_TOKEN ||
+    process.env.NEW_STORAGE_KV_REST_API_TOKEN ||
+    process.env.NEW_STORAGE_KV_REST_API_READ_ONLY_TOKEN;
 
   if (!url || !token) {
     return null;
