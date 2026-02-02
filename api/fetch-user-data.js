@@ -39,8 +39,16 @@ function getRedisClient() {
     return null;
   }
 
-  redis = new Redis({ url, token });
-  return redis;
+  try {
+    redis = new Redis({ url, token });
+    return redis;
+  } catch (err) {
+    console.warn(
+      'Failed to initialize Upstash Redis client, continuing without cache:',
+      err && err.message ? err.message : err
+    );
+    return null;
+  }
 }
 
 // Simple versioned cache key helpers so we can invalidate cached
@@ -89,15 +97,50 @@ function normalizeTitleForSearch(name) {
 }
 
 async function fetchHtml(url) {
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; LetterboxdStatsBot/1.0; +https://github.com/ErenTerakye)'
+  const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
+  ];
+
+  const headers = {
+    'User-Agent': USER_AGENTS[0],
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Referer': `${LETTERBOXD_BASE}/`,
+    'Upgrade-Insecure-Requests': '1',
+  };
+
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 1) {
+        headers['User-Agent'] = USER_AGENTS[(attempt - 1) % USER_AGENTS.length];
+      }
+
+      const res = await fetch(url, { headers });
+
+      if (!res.ok) {
+        const err = new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+        err.status = res.status;
+        throw err;
+      }
+
+      return await res.text();
+    } catch (err) {
+      // Avoid retrying for most non-403 4xx errors.
+      if (err && err.status && err.status >= 400 && err.status < 500 && err.status !== 403) {
+        throw err;
+      }
+
+      if (attempt === MAX_ATTEMPTS) {
+        throw err;
+      }
+
+      const backoffMs = 250 * Math.pow(2, attempt - 1);
+      await new Promise((r) => setTimeout(r, backoffMs));
     }
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
   }
-  return await res.text();
 }
 
 function normalizeFilmUrl(letterboxdUri) {
