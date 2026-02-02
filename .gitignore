@@ -10,6 +10,15 @@ lerna-debug.log*
 node_modules
 *.local
 
+# Local environment files (never commit)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Build output
+dist
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
