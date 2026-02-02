@@ -69,6 +69,14 @@ The frontend logic for visualization lives primarily in `App.tsx` and uses **Rec
 
 2. **Configure environment variables**
 
+	This repo includes example env files you can copy locally. Real `.env*` files are intentionally gitignored so secrets and local config don’t get committed.
+
+	- **Frontend (Vite):** copy `.env.example` → `.env.production` (or `.env.local`) and set:
+	  - `VITE_API_BASE_URL` (optional)
+	  - Important: anything prefixed with `VITE_` is bundled into the browser — never put API keys/tokens there.
+
+	- **Backend (serverless / Node):** see `letterboxd-backend/.env.example` for the server-side variables (these must be configured in your deployment environment, not the browser).
+
 	The backend scraper / enricher requires a TMDB key:
 
 	- `TMDB_API_KEY` – used by `api/fetch-user-data.js` / `letterboxd-backend/fetch-user-data.js`.
